@@ -1101,7 +1101,7 @@ class CPL_DLL OGRSimpleCurve: public OGRCurve
     /** Type of child elements. */
     typedef OGRPoint ChildType;
 
-    /** Return begin of point iterator. 
+    /** Return begin of point iterator.
      *
      * Using this iterator for standard range-based loops is safe, but
      * due to implementation limitations, you shouldn't try to access
@@ -1257,14 +1257,14 @@ class CPL_DLL OGRLineString : public OGRSimpleCurve
     virtual double get_AreaOfCurveSegments() const override;
 //! @endcond
 
-    static OGRLinearRing* CastToLinearRing( OGRLineString* poLS );
-
   public:
     OGRLineString();
     OGRLineString( const OGRLineString& other );
     ~OGRLineString() override;
 
     OGRLineString& operator=(const OGRLineString& other);
+
+    static OGRLinearRing* CastToLinearRing( OGRLineString* poLS );
 
     virtual OGRLineString* CurveToLine( double dfMaxAngleStepSizeDegrees = 0,
                                         const char* const* papszOptions = nullptr )

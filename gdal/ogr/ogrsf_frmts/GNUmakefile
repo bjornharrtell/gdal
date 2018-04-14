@@ -4,7 +4,7 @@ include ../../GDALmake.opt
 SUBDIRS-yes	:= \
 	generic avc bna csv dgn geojson gml gmt mem kml \
 	mitab ntf gpx rec s57 sdts shape tiger vrt \
-	geoconcept xplane georss gtm dxf pgdump gpsbabel \
+	flatgeobuf geoconcept xplane georss gtm dxf pgdump gpsbabel \
 	sua openair pds htf aeronavfaa edigeo svg idrisi \
 	arcgen segukooa segy sxf openfilegdb wasp selafin jml vdv mvt
 
