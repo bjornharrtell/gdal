@@ -622,7 +622,7 @@ class CPL_DLL OGRFeature
     int                 GetFieldAsInteger( int i ) const;
     GIntBig             GetFieldAsInteger64( int i ) const;
     double              GetFieldAsDouble( int i ) const;
-    const char         *GetFieldAsString( int i ) const;
+    const char         *GetFieldAsString( int i, bool iso8601 = false) const;
     const int          *GetFieldAsIntegerList( int i, int *pnCount ) const;
     const GIntBig      *GetFieldAsInteger64List( int i, int *pnCount ) const;
     const double       *GetFieldAsDoubleList( int i, int *pnCount ) const;

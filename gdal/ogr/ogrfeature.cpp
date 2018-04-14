@@ -2204,18 +2204,25 @@ static void OGRFeatureFormatDateTimeBuffer( char szTempBuffer[TEMP_BUFFER_SIZE],
                                             int nYear, int nMonth, int nDay,
                                             int nHour, int nMinute,
                                             float fSecond,
-                                            int nTZFlag )
+                                            int nTZFlag, bool iso8601)
 {
     const int ms = OGR_GET_MS(fSecond);
-    if( ms != 0 )
+    char const *fmt;
+
+    if( ms != 0 ) {
+        if (iso8601)
+            fmt = "%04d-%02d-%02dT%02d:%02d:%06.3f";
+        else
+            fmt = "%04d/%02d/%02d %02d:%02d:%06.3f";
         CPLsnprintf( szTempBuffer, TEMP_BUFFER_SIZE,
-                  "%04d/%02d/%02d %02d:%02d:%06.3f",
+                  fmt,
                   nYear,
                   nMonth,
                   nDay,
                   nHour,
                   nMinute,
                   fSecond );
+    }
     else  // Default format.
     {
         if( CPLIsNan(fSecond) || fSecond < 0.0  || fSecond > 62.0 )
@@ -2225,8 +2232,12 @@ static void OGRFeatureFormatDateTimeBuffer( char szTempBuffer[TEMP_BUFFER_SIZE],
                      "OGRFeatureFormatDateTimeBuffer: fSecond is invalid.  "
                      "Forcing '%f' to 0.0.", fSecond);
         }
+        if (iso8601)
+            fmt = "%04d-%02d-%02dT%02d:%02d:%02d";
+        else
+            fmt = "%04d/%02d/%02d %02d:%02d:%02d";
         snprintf( szTempBuffer, TEMP_BUFFER_SIZE,
-                  "%04d/%02d/%02d %02d:%02d:%02d",
+                  fmt,
                   nYear,
                   nMonth,
                   nDay,
@@ -2289,12 +2300,13 @@ static void OGRFeatureFormatDateTimeBuffer( char szTempBuffer[TEMP_BUFFER_SIZE],
  * This method is the same as the C function OGR_F_GetFieldAsString().
  *
  * @param iField the field to fetch, from 0 to GetFieldCount()-1.
+ * @param iso8601 whether to format the date string according to ISO 8601 or not
  *
  * @return the field value.  This string is internal, and should not be
  * modified, or freed.  Its lifetime may be very brief.
  */
 
-const char *OGRFeature::GetFieldAsString( int iField ) const
+const char *OGRFeature::GetFieldAsString( int iField, bool iso8601) const
 
 {
     char szTempBuffer[TEMP_BUFFER_SIZE] = {};
@@ -2421,7 +2433,8 @@ const char *OGRFeature::GetFieldAsString( int iField ) const
                                        pauFields[iField].Date.Hour,
                                        pauFields[iField].Date.Minute,
                                        pauFields[iField].Date.Second,
-                                       pauFields[iField].Date.TZFlag );
+                                       pauFields[iField].Date.TZFlag,
+                                       iso8601);
 
         m_pszTmpFieldValue = VSI_STRDUP_VERBOSE( szTempBuffer );
         if( m_pszTmpFieldValue == nullptr )
@@ -4896,7 +4909,8 @@ void OGRFeature::SetField( int iField, int nYear, int nMonth, int nDay,
                                        nHour,
                                        nMinute,
                                        fSecond,
-                                       nTZFlag);
+                                       nTZFlag,
+                                       false);
         SetField( iField, szTempBuffer );
     }
 }
