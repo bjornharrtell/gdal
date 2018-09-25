@@ -17694,6 +17694,8 @@ GTiffDataset::CreateCopy( const char * pszFilename, GDALDataset *poSrcDS,
 
 #if defined(HAVE_LIBJPEG) || defined(JPEG_DIRECT_COPY)
     bool bTryCopy = true;
+#else
+    bool bTryCopy = false;
 #endif
 
 #ifdef HAVE_LIBJPEG
