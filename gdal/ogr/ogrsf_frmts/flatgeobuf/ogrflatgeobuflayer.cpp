@@ -281,8 +281,7 @@ OGRFeature *OGRFlatGeobufLayer::GetNextFeature()
                     ogrField->Real = value->double_value();
                     break;
                 case ColumnType::String:
-                    // TODO: string deserialize/copy
-                    //ogrField->String = value->string_value()->data();
+                    ogrField->String = CPLStrdup(value->string_value()->data());
                     break;
                 default:
                     CPLDebug("FlatGeobuf", "Unknown column->type: %d", type);
@@ -432,32 +431,65 @@ OGRErr OGRFlatGeobufLayer::ICreateFeature(OGRFeature *poNewFeature)
     std::vector<Offset<Value>> values;
     FlatBufferBuilder fbb;
 
+    uint16_t column_index = 0;
+    int8_t byte_value = 0;
+    int8_t ubyte_value = 0;
+    bool bool_value = false;
+    int16_t short_value = 0;
+    uint16_t ushort_value = 0;
+    int32_t int_value = 0;
+    uint32_t uint_value = 0;
+    int64_t long_value = 0;
+    uint64_t ulong_value = 0;
+    float float_value = 0.0f;
+    double double_value = 0.0;
+    const char *string_value = nullptr;
+    const char *json_value = nullptr;
+    const char *datetime_value = nullptr;
+
     for (int i = 0; i < m_poFeatureDefn->GetFieldCount(); i++) {
         auto fieldDef = m_poFeatureDefn->GetFieldDefn(i);
         if (poNewFeature->IsFieldNull(i))
             continue;
-        ValueBuilder vb(fbb);
-        vb.add_column_index(i);
+        uint16_t column_index = i;
+        int8_t byte_value = 0;
+        int8_t ubyte_value = 0;
+        bool bool_value = false;
+        int16_t short_value = 0;
+        uint16_t ushort_value = 0;
+        int32_t int_value = 0;
+        uint32_t uint_value = 0;
+        int64_t long_value = 0;
+        uint64_t ulong_value = 0;
+        float float_value = 0.0f;
+        double double_value = 0.0;
+        const char *string_value = nullptr;
+        const char *json_value = nullptr;
+        const char *datetime_value = nullptr;
+
         auto fieldType = fieldDef->GetType();
         switch (fieldType) {
             case OGRFieldType::OFTInteger:
-                vb.add_int_value(poNewFeature->GetFieldAsInteger(i));
+                int_value = poNewFeature->GetFieldAsInteger(i);
                 break;
             case OGRFieldType::OFTInteger64:
-                vb.add_long_value(poNewFeature->GetFieldAsInteger64(i));
+                long_value = poNewFeature->GetFieldAsInteger64(i);
                 break;
             case OGRFieldType::OFTReal:
-                vb.add_double_value(poNewFeature->GetFieldAsDouble(i));
+                double_value = poNewFeature->GetFieldAsDouble(i);
                 break;
             case OGRFieldType::OFTString:
-                // fbb.CreateString(poNewFeature->GetFieldAsString(i))
-                //vb.add_string_value("test");
+                string_value = poNewFeature->GetFieldAsString(i);
                 break;
             default:
                 CPLDebug("FlatGeobuf", "Unknown fieldType: %d", fieldType);
                 throw std::invalid_argument("Unknown fieldType");
         }
-        auto value = vb.Finish();
+        auto value = CreateValueDirect(fbb, column_index,
+            byte_value, ubyte_value, bool_value, short_value, ushort_value, int_value, uint_value, long_value, ulong_value,
+            float_value, double_value,
+            string_value, json_value, datetime_value
+        );
         values.push_back(value);
     }
 
@@ -522,6 +554,8 @@ void OGRFlatGeobufLayer::writePolygon(OGRPolygon *p, std::vector<double> &coords
 
 Offset<Geometry> OGRFlatGeobufLayer::writeGeometry(FlatBufferBuilder& fbb, OGRGeometry *ogrGeometry)
 {
+    if (ogrGeometry == nullptr)
+        return 0;
     std::vector<double> coords;
     std::vector<uint32_t> lengths;
     std::vector<uint32_t> ringLengths;
