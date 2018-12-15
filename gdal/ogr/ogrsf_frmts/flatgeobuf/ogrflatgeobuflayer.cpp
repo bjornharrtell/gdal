@@ -231,9 +231,11 @@ OGRFeature *OGRFlatGeobufLayer::GetNextFeature()
     VSIFReadL(&m_featureSize, 4, 1, m_poFp);
     if (m_featureBufSize == 0) {
         m_featureBufSize = std::max(1024U * 32U, m_featureSize);
+        CPLDebug("FlatGeobuf", "m_featureBufSize: %d", m_featureBufSize);
         m_featureBuf = static_cast<GByte *>(VSI_MALLOC_VERBOSE(m_featureBufSize));
     } else if (m_featureBufSize < m_featureSize) {
         m_featureBufSize = std::max(m_featureBufSize * 2, m_featureSize);
+        CPLDebug("FlatGeobuf", "m_featureBufSize: %d", m_featureBufSize);
         m_featureBuf = static_cast<GByte *>(VSI_REALLOC_VERBOSE(m_featureBuf, m_featureBufSize));
     }
     VSIFReadL(m_featureBuf, 1, m_featureSize, m_poFp);
@@ -300,6 +302,7 @@ void OGRFlatGeobufLayer::ensurePadfBuffers(size_t count, uint8_t dimensions)
     size_t requiredSize = count * sizeof(double);
     if (m_padfSize == 0) {
         m_padfSize = std::max(1024 * sizeof(double), requiredSize);
+        CPLDebug("FlatGeobuf", "m_padfSize: %d", m_padfSize);
         m_padfX = static_cast<double *>(CPLMalloc(m_padfSize));
         m_padfY = static_cast<double *>(CPLMalloc(m_padfSize));
         if (dimensions > 2)
@@ -308,6 +311,7 @@ void OGRFlatGeobufLayer::ensurePadfBuffers(size_t count, uint8_t dimensions)
             m_padfM = static_cast<double *>(CPLMalloc(m_padfSize));
     } else if (m_padfSize < requiredSize) {
         m_padfSize = std::max(m_padfSize * 2, requiredSize);
+        CPLDebug("FlatGeobuf", "m_padfSize: %d", m_padfSize);
         m_padfX = static_cast<double *>(CPLRealloc(m_padfX, m_padfSize));
         m_padfY = static_cast<double *>(CPLRealloc(m_padfY, m_padfSize));
         if (dimensions > 2)
@@ -375,12 +379,12 @@ OGRPolygon *OGRFlatGeobufLayer::readPolygon(const double *coords, uint32_t coord
 {
     auto p = new OGRPolygon();
     if (ringLengths == nullptr || ringLengths->size() < 2) {
-        p->addRing(readLinearRing(coords, coordsLength, dimensions));
+        p->addRingDirectly(readLinearRing(coords, coordsLength, dimensions));
     } else {
         uint32_t offset = 0;
         for (size_t i = 0; i < ringLengths->size(); i++) {
             auto ringLength = ringLengths->Get(i);
-            p->addRing(readLinearRing(coords, ringLength, dimensions, offset));
+            p->addRingDirectly(readLinearRing(coords, ringLength, dimensions, offset));
             offset += ringLength;
         }
     }
