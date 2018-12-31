@@ -137,7 +137,6 @@ OGRFlatGeobufLayer::~OGRFlatGeobufLayer()
         CPLDebug("FlatGeobuf", "Request to create %zu features", m_featuresCount);
         size_t c;
 
-        //SetMetadataItem(OLMD_FID64, "YES");
         const char *filename = CPLFormFilename("", m_pszLayerName, "fgb");
         VSILFILE *fp = VSIFOpenL(filename, "wb");
 
@@ -240,8 +239,7 @@ OGRFeature *OGRFlatGeobufLayer::GetNextFeature()
     }
     VSIFReadL(m_featureBuf, 1, m_featureSize, m_poFp);
 
-    // TODO: only on debug
-    /*
+#ifdef DEBUG
     const uint8_t * vBuf = const_cast<const uint8_t *>(reinterpret_cast<uint8_t *>(featureBuf));
     Verifier v(vBuf, featureSize);
     auto ok = VerifyFeatureBuffer(v);
@@ -250,11 +248,11 @@ OGRFeature *OGRFlatGeobufLayer::GetNextFeature()
         CPLDebug("FlatGeobuf", "m_offset: %zu", m_offset);
         CPLDebug("FlatGeobuf", "m_featuresPos: %zu", m_featuresPos);
         CPLDebug("FlatGeobuf", "featureSize: %d", featureSize);
-    }*/
+    }
+#endif
 
     auto feature = GetRoot<Feature>(m_featureBuf);
     auto fid = feature->fid();
-    //CPLDebug("FlatGeobuf", "FID %zu", fid);
     poFeature->SetFID(fid);
     auto geometry = feature->geometry();
     auto ogrGeometry = readGeometry(geometry, m_dimensions);
@@ -427,7 +425,6 @@ OGRErr OGRFlatGeobufLayer::CreateField(OGRFieldDefn *poField, int bApproxOK)
 
 OGRErr OGRFlatGeobufLayer::ICreateFeature(OGRFeature *poNewFeature)
 {
-    //CPLDebug("FlatGeobuf", "ICreateFeature");
     auto fid = poNewFeature->GetFID();
     if (fid == OGRNullFID)
         fid = m_featuresCount;
@@ -490,7 +487,10 @@ OGRErr OGRFlatGeobufLayer::ICreateFeature(OGRFeature *poNewFeature)
                 throw std::invalid_argument("Unknown fieldType");
         }
         auto value = CreateValueDirect(fbb, column_index,
-            byte_value, ubyte_value, bool_value, short_value, ushort_value, int_value, uint_value, long_value, ulong_value,
+            byte_value, ubyte_value, bool_value,
+            short_value, ushort_value,
+            int_value, uint_value,
+            long_value, ulong_value,
             float_value, double_value,
             string_value, json_value, datetime_value
         );
@@ -522,7 +522,6 @@ OGRErr OGRFlatGeobufLayer::ICreateFeature(OGRFeature *poNewFeature)
     m_featuresCount++;
 
     return OGRERR_NONE;
-    //return OGRERR_FAILURE;
 }
 
 void OGRFlatGeobufLayer::writePoint(OGRPoint *p, std::vector<double> &coords)
@@ -556,7 +555,7 @@ void OGRFlatGeobufLayer::writePolygon(OGRPolygon *p, std::vector<double> &coords
     }
 }
 
-Offset<Geometry> OGRFlatGeobufLayer::writeGeometry(FlatBufferBuilder& fbb, OGRGeometry *ogrGeometry)
+Offset<Geometry> OGRFlatGeobufLayer::writeGeometry(FlatBufferBuilder &fbb, OGRGeometry *ogrGeometry)
 {
     if (ogrGeometry == nullptr)
         return 0;
