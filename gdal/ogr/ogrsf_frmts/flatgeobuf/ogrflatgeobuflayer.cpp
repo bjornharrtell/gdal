@@ -164,7 +164,7 @@ OGRFlatGeobufLayer::~OGRFlatGeobufLayer()
         }
 
         auto header = CreateHeaderDirect(
-            fbb, nullptr, &extentVector, m_geometryType, 2, &columns, m_featuresCount, true, index, srs);
+            fbb, m_pszLayerName, &extentVector, m_geometryType, 2, &columns, m_featuresCount, true, index, srs);
         fbb.FinishSizePrefixed(header);
         c = VSIFWriteL(fbb.GetBufferPointer(), 1, fbb.GetSize(), fp);
         CPLDebug("FlatGeobuf", "Wrote header (%zu bytes)", c);
