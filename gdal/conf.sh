@@ -1,5 +1,6 @@
 #!/bin/sh
-./configure --enable-debug \
+#./configure --enable-debug \
+./configure \
     --with-geos \
     --without-bsb \
     --without-cfitsio \
@@ -45,4 +46,5 @@
     --without-sqlite3 \
     --without-webp \
     --without-xerces \
-    --without-xml2
+    --without-xml2 \
+    --without-lerc
