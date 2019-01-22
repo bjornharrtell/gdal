@@ -46,5 +46,4 @@
     --without-sqlite3 \
     --without-webp \
     --without-xerces \
-    --without-xml2 \
-    --without-lerc
+    --without-xml2
