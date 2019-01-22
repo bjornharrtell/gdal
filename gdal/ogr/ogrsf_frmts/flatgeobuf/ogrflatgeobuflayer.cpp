@@ -22,6 +22,7 @@ OGRFlatGeobufLayer::OGRFlatGeobufLayer(const Header *poHeader, const char* pszFi
     m_poHeader = poHeader;
     // TODO: free
     m_pszFilename = CPLStrdup(pszFilename);
+    m_offsetInit = offset;
     m_offset = offset;
     m_create = false;
 
@@ -155,13 +156,14 @@ OGRFlatGeobufLayer::~OGRFlatGeobufLayer()
         auto columns = writeColumns(fbb);
         Offset<Index> index = 0;
         Offset<Srs> srs = 0;
-        if (m_poSRS != nullptr) {
+        // TODO: this can crash for some inputs
+        /*if (m_poSRS != nullptr) {
             auto code = m_poSRS->GetEPSGGeogCS();
             if (code != -1) {
                 CPLDebug("FlatGeobuf", "Creating SRS with EPSG code %d", code);
                 srs = CreateSrsDirect(fbb, code);
             }
-        }
+        }*/
 
         auto header = CreateHeaderDirect(
             fbb, m_pszLayerName, &extentVector, m_geometryType, 2, &columns, m_featuresCount, true, index, srs);
@@ -254,6 +256,7 @@ OGRFeature *OGRFlatGeobufLayer::GetNextFeature()
     auto feature = GetRoot<Feature>(m_featureBuf);
     auto fid = feature->fid();
     poFeature->SetFID(fid);
+    //CPLDebug("FlatGeobuf", "fid: %zu", fid);
     auto geometry = feature->geometry();
     auto ogrGeometry = readGeometry(geometry, m_dimensions);
     // TODO: find out why this is done in other drivers
@@ -268,7 +271,7 @@ OGRFeature *OGRFlatGeobufLayer::GetNextFeature()
             auto columnIndex = value->column_index();
             auto column = m_poHeader->columns()->Get(columnIndex);
             auto type = column->type();
-            auto name = column->name();
+            // auto name = column->name();
             auto ogrField = poFeature->GetRawFieldRef(columnIndex);
             switch (type) {
                 case ColumnType::Int:
@@ -284,7 +287,7 @@ OGRFeature *OGRFlatGeobufLayer::GetNextFeature()
                     ogrField->String = CPLStrdup(value->string_value()->data());
                     break;
                 default:
-                    CPLDebug("FlatGeobuf", "Unknown column->type: %d", type);
+                    CPLDebug("FlatGeobuf", "Unknown column->type: %d", (int) type);
                     throw std::invalid_argument("Unknown column->type");
             }
         }
@@ -300,7 +303,7 @@ void OGRFlatGeobufLayer::ensurePadfBuffers(size_t count, uint8_t dimensions)
     size_t requiredSize = count * sizeof(double);
     if (m_padfSize == 0) {
         m_padfSize = std::max(1024 * sizeof(double), requiredSize);
-        CPLDebug("FlatGeobuf", "m_padfSize: %d", m_padfSize);
+        CPLDebug("FlatGeobuf", "m_padfSize: %zu", m_padfSize);
         m_padfX = static_cast<double *>(CPLMalloc(m_padfSize));
         m_padfY = static_cast<double *>(CPLMalloc(m_padfSize));
         if (dimensions > 2)
@@ -309,7 +312,7 @@ void OGRFlatGeobufLayer::ensurePadfBuffers(size_t count, uint8_t dimensions)
             m_padfM = static_cast<double *>(CPLMalloc(m_padfSize));
     } else if (m_padfSize < requiredSize) {
         m_padfSize = std::max(m_padfSize * 2, requiredSize);
-        CPLDebug("FlatGeobuf", "m_padfSize: %d", m_padfSize);
+        CPLDebug("FlatGeobuf", "m_padfSize: %zu", m_padfSize);
         m_padfX = static_cast<double *>(CPLRealloc(m_padfX, m_padfSize));
         m_padfY = static_cast<double *>(CPLRealloc(m_padfY, m_padfSize));
         if (dimensions > 2)
@@ -452,21 +455,7 @@ OGRErr OGRFlatGeobufLayer::ICreateFeature(OGRFeature *poNewFeature)
         auto fieldDef = m_poFeatureDefn->GetFieldDefn(i);
         if (poNewFeature->IsFieldNull(i))
             continue;
-        uint16_t column_index = i;
-        int8_t byte_value = 0;
-        int8_t ubyte_value = 0;
-        bool bool_value = false;
-        int16_t short_value = 0;
-        uint16_t ushort_value = 0;
-        int32_t int_value = 0;
-        uint32_t uint_value = 0;
-        int64_t long_value = 0;
-        uint64_t ulong_value = 0;
-        float float_value = 0.0f;
-        double double_value = 0.0;
-        const char *string_value = nullptr;
-        const char *json_value = nullptr;
-        const char *datetime_value = nullptr;
+        column_index = i;
 
         auto fieldType = fieldDef->GetType();
         switch (fieldType) {
@@ -607,4 +596,13 @@ int OGRFlatGeobufLayer::TestCapability(const char *pszCap)
         return true;
     else
         return false;
+}
+
+
+void OGRFlatGeobufLayer::ResetReading()
+{
+    CPLDebug("FlatGeobuf", "ResetReading");
+    m_offset = m_offsetInit;
+    m_featuresPos = 0;
+    return;
 }

@@ -36,6 +36,7 @@ class OGRFlatGeobufLayer : public OGRLayer
         uint64_t m_featuresPos = 0;
         uint64_t m_featuresSize = 0;
         uint64_t m_offset = 0;
+        uint64_t m_offsetInit = 0;
 
         bool m_create = false;
 
@@ -77,7 +78,7 @@ class OGRFlatGeobufLayer : public OGRLayer
         virtual OGRErr ICreateFeature(OGRFeature *poFeature) override;
         virtual int TestCapability(const char *) override;
 
-        virtual void ResetReading() override { return; }
+        virtual void ResetReading() override;
         virtual OGRFeatureDefn *GetLayerDefn() override { return m_poFeatureDefn; }
         virtual GIntBig GetFeatureCount(int bForce) override { return m_featuresCount; }
 };
