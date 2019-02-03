@@ -212,8 +212,8 @@ OGRFeature *OGRFlatGeobufLayer::GetFeature(GIntBig nFeatureId)
 
 OGRFeature *OGRFlatGeobufLayer::GetNextFeature()
 {
-    if (m_featuresPos >= m_featuresCount) {
-        CPLDebug("FlatGeobuf", "Iteration end (m_featuresPos >= m_featuresCount)");
+    if (m_featuresPos >= m_featuresCount || (m_foundFeaturesCount > 0 && m_featuresPos >= m_foundFeaturesCount)) {
+        CPLDebug("FlatGeobuf", "Iteration end");
         if (m_poFp != nullptr) {
             VSIFCloseL(m_poFp);
             m_poFp = nullptr;
@@ -224,6 +224,40 @@ OGRFeature *OGRFlatGeobufLayer::GetNextFeature()
     if (m_poFp == nullptr) {
         CPLDebug("FlatGeobuf", "Iteration start (will attempt to open file %s)", m_pszFilename);
         m_poFp = VSIFOpenL(m_pszFilename, "rb");
+
+        if (m_poFilterGeom != nullptr) {
+            CPLDebug("FlatGeobuf", "Detected spatial filter");
+            uint32_t headerSize;
+            VSIFReadL(&headerSize, 4, 1, m_poFp);
+            auto featuresCount = m_poHeader->features_count();
+            CPLDebug("FlatGeobuf", "featuresCount: %zu", featuresCount);
+            auto treeSize = PackedRTree::size(featuresCount);
+            CPLDebug("FlatGeobuf", "treeSize: %zu", treeSize);
+            VSIFSeekL(m_poFp, 4 + headerSize + 4, SEEK_SET);
+            auto treeBuf = static_cast<GByte *>(VSI_MALLOC_VERBOSE(treeSize));
+            CPLDebug("FlatGeobuf", "treeBuf start read");
+            VSIFReadL(treeBuf, 1, treeSize, m_poFp);
+            CPLDebug("FlatGeobuf", "treeBuf read");
+            PackedRTree tree(treeBuf, featuresCount);
+            CPLDebug("FlatGeobuf", "tree created");
+            auto env2 = tree.getExtent();
+            CPLDebug("FlatGeobuf", "env: %f %f %f %f", env2.minX, env2.minY, env2.maxX, env2.maxY);
+            OGREnvelope env;
+            m_poFilterGeom->getEnvelope(&env);
+            CPLDebug("FlatGeobuf", "env: %f %f %f %f", env.MinX, env.MinY, env.MaxX, env.MaxY);
+            m_foundFeatureOffsets = tree.search(env.MinX, env.MinY, env.MaxX, env.MaxY);
+            m_foundFeaturesCount = m_foundFeatureOffsets.size();
+            CPLDebug("FlatGeobuf", "m_foundFeaturesCount: %zu", m_foundFeaturesCount);
+            if (m_foundFeaturesCount == 0) {
+                CPLDebug("FlatGeobuf", "No features found");
+                if (m_poFp != nullptr) {
+                    VSIFCloseL(m_poFp);
+                    m_poFp = nullptr;
+                }
+                return nullptr;
+            }
+            m_offset = m_foundFeatureOffsets[m_featuresPos];
+        }
     }
 
     OGRFeature* poFeature = new OGRFeature(m_poFeatureDefn);
@@ -294,7 +328,10 @@ OGRFeature *OGRFlatGeobufLayer::GetNextFeature()
     }
 
     m_featuresPos++;
-    m_offset += m_featureSize + 4;
+    if (m_foundFeaturesCount > 0 && m_foundFeaturesCount < m_featuresPos)
+        m_offset = m_foundFeatureOffsets[m_featuresPos];
+    else
+        m_offset += m_featureSize + 4;
     return poFeature;
 }
 
