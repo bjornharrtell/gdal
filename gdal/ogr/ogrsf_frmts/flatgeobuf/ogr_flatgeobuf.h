@@ -37,8 +37,10 @@ class OGRFlatGeobufLayer : public OGRLayer
         uint64_t m_featuresSize = 0;
         uint64_t m_offset = 0;
         uint64_t m_offsetInit = 0;
-        std::vector<uint64_t> m_foundFeatureOffsets;
+        uint64_t *m_featureOffsets = nullptr;
+        std::vector<uint64_t> m_foundFeatureIndices;
         size_t m_foundFeaturesCount = 0;
+        bool m_processedSpatialIndex = false;
 
         bool m_create = false;
 
@@ -63,6 +65,7 @@ class OGRFlatGeobufLayer : public OGRLayer
         OGRFieldType toOGRFieldType(ColumnType type);
         const std::vector<flatbuffers::Offset<Column>> writeColumns(flatbuffers::FlatBufferBuilder &fbb);
         void readColumns();
+        void processSpatialIndex();
 
         // serialize
         void writePoint(OGRPoint *p, std::vector<double> &coords);
@@ -82,7 +85,7 @@ class OGRFlatGeobufLayer : public OGRLayer
 
         virtual void ResetReading() override;
         virtual OGRFeatureDefn *GetLayerDefn() override { return m_poFeatureDefn; }
-        virtual GIntBig GetFeatureCount(int bForce) override { return m_featuresCount; }
+        virtual GIntBig GetFeatureCount(int bForce) override;
 };
 
 class OGRFlatGeobufDataset final: public GDALDataset
