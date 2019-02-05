@@ -147,6 +147,9 @@ OGRFlatGeobufLayer::~OGRFlatGeobufLayer()
 
         Rect extent = calcExtent(m_featureItems);
 
+        CPLDebug("FlatGeobuf", "Sorting items for Packed R-tree");
+        hilbertSort(m_featureItems);
+
         CPLDebug("FlatGeobuf", "Creating Packed R-tree");
         PackedRTree tree(m_featureItems, extent);
         const auto extentVector = extent.toVector();
