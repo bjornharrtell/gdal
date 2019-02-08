@@ -209,6 +209,8 @@ OGRFlatGeobufLayer::~OGRFlatGeobufLayer()
 
     if (m_featureOffsets != nullptr)
         VSIFree(m_featureOffsets);
+
+    m_processedSpatialIndex = false;
 }
 
 OGRFeature *OGRFlatGeobufLayer::GetFeature(GIntBig nFeatureId)
@@ -218,11 +220,11 @@ OGRFeature *OGRFlatGeobufLayer::GetFeature(GIntBig nFeatureId)
 
 void OGRFlatGeobufLayer::processSpatialIndex() {
     if (m_poFilterGeom != nullptr && !m_processedSpatialIndex) {
+        m_processedSpatialIndex = true;
         if (m_poFp == nullptr) {
             CPLDebug("FlatGeobuf", "processSpatialIndex (will attempt to open file %s)", m_pszFilename);
             m_poFp = VSIFOpenL(m_pszFilename, "rb");
         }
-        m_processedSpatialIndex = true;
         VSIFSeekL(m_poFp, 4, SEEK_SET); // skip magic bytes
         uint32_t headerSize;
         VSIFReadL(&headerSize, 4, 1, m_poFp);
@@ -235,26 +237,22 @@ void OGRFlatGeobufLayer::processSpatialIndex() {
         OGREnvelope env;
         m_poFilterGeom->getEnvelope(&env);
         m_foundFeatureIndices = tree.search(env.MinX, env.MinY, env.MaxX, env.MaxY);
-        m_foundFeaturesCount = m_foundFeatureIndices.size();
-        if (m_foundFeaturesCount == 0)
+        m_featuresCount = m_foundFeatureIndices.size();
+        if (m_featuresCount == 0)
             return;
         m_featureOffsets = static_cast<uint64_t *>(VSI_MALLOC_VERBOSE(featuresCount * 8));
         VSIFReadL(m_featureOffsets, 8, featuresCount, m_poFp);
-        m_offset = m_offsetInit + m_featureOffsets[m_foundFeatureIndices[m_featuresPos]];
     }
 }
 
 GIntBig OGRFlatGeobufLayer::GetFeatureCount(int bForce) {
     processSpatialIndex();
-    if (m_processedSpatialIndex)
-        return m_foundFeaturesCount;
-    else
-        return m_featuresCount;
+    return m_featuresCount;
 }
 
 OGRFeature *OGRFlatGeobufLayer::GetNextFeature()
 {
-    if (m_featuresPos >= m_featuresCount || (m_processedSpatialIndex && m_featuresPos >= m_foundFeaturesCount)) {
+    if (m_featuresPos >= m_featuresCount) {
         CPLDebug("FlatGeobuf", "Iteration end");
         if (m_poFp != nullptr) {
             VSIFCloseL(m_poFp);
@@ -267,7 +265,7 @@ OGRFeature *OGRFlatGeobufLayer::GetNextFeature()
         CPLDebug("FlatGeobuf", "Iteration start (will attempt to open file %s)", m_pszFilename);
         m_poFp = VSIFOpenL(m_pszFilename, "rb");
         processSpatialIndex();
-        if (m_processedSpatialIndex && m_foundFeaturesCount == 0) {
+        if (m_featuresCount == 0) {
             CPLDebug("FlatGeobuf", "No features found");
             if (m_poFp != nullptr) {
                 VSIFCloseL(m_poFp);
@@ -276,6 +274,11 @@ OGRFeature *OGRFlatGeobufLayer::GetNextFeature()
             return nullptr;
         }
     }
+
+    if (m_processedSpatialIndex)
+        m_offset = m_offsetInit + m_featureOffsets[m_foundFeatureIndices[m_featuresPos]];
+    else if (m_featuresPos > 0)
+        m_offset += m_featureSize + 4;
 
     OGRFeature* poFeature = new OGRFeature(m_poFeatureDefn);
 
@@ -345,10 +348,6 @@ OGRFeature *OGRFlatGeobufLayer::GetNextFeature()
     }
 
     m_featuresPos++;
-    if (m_foundFeaturesCount > 0 && m_foundFeaturesCount < m_featuresPos)
-        m_offset = m_offsetInit + m_featureOffsets[m_foundFeatureIndices[m_featuresPos]];
-    else
-        m_offset += m_featureSize + 4;
     return poFeature;
 }
 

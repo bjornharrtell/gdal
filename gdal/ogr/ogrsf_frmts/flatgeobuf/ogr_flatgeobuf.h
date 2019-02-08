@@ -39,7 +39,6 @@ class OGRFlatGeobufLayer : public OGRLayer
         uint64_t m_offsetInit = 0;
         uint64_t *m_featureOffsets = nullptr;
         std::vector<uint64_t> m_foundFeatureIndices;
-        size_t m_foundFeaturesCount = 0;
         bool m_processedSpatialIndex = false;
 
         bool m_create = false;
