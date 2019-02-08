@@ -43,7 +43,10 @@
     --without-python \
     --without-qhull \
     --without-sde \
-    --without-sqlite3 \
     --without-webp \
     --without-xerces \
-    --without-xml2
+    --without-xml2 \
+    --with-spatialite \
+    --with-sqlite3 \
+    --with-threads \
+    --with-hide-internal-symbols=yes
