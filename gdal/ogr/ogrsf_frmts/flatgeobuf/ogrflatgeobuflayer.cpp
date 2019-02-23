@@ -230,17 +230,19 @@ void OGRFlatGeobufLayer::processSpatialIndex() {
         VSIFReadL(&headerSize, 4, 1, m_poFp);
         auto featuresCount = m_poHeader->features_count();
         auto treeSize = PackedRTree::size(featuresCount);
-        VSIFSeekL(m_poFp, 4 + 4 + headerSize, SEEK_SET);
-        auto treeBuf = static_cast<GByte *>(VSI_MALLOC_VERBOSE(treeSize));
-        VSIFReadL(treeBuf, 1, treeSize, m_poFp);
-        PackedRTree tree(treeBuf, featuresCount);
         OGREnvelope env;
         m_poFilterGeom->getEnvelope(&env);
-        m_foundFeatureIndices = tree.search(env.MinX, env.MinY, env.MaxX, env.MaxY);
+        Rect r { env.MinX, env.MinY, env.MaxX, env.MaxY };
+        auto readNode = [this, headerSize] (uint8_t *buf, uint32_t i, uint32_t s) {
+            VSIFSeekL(m_poFp, 4 + 4 + headerSize + i, SEEK_SET);
+            VSIFReadL(buf, 1, s, m_poFp);
+        };
+        m_foundFeatureIndices = PackedRTree::streamSearch(featuresCount, 16, r, readNode);
         m_featuresCount = m_foundFeatureIndices.size();
         if (m_featuresCount == 0)
             return;
         m_featureOffsets = static_cast<uint64_t *>(VSI_MALLOC_VERBOSE(featuresCount * 8));
+        VSIFSeekL(m_poFp, 4 + 4 + headerSize + treeSize, SEEK_SET);
         VSIFReadL(m_featureOffsets, 8, featuresCount, m_poFp);
     }
 }

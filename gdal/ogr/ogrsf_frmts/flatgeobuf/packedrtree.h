@@ -52,6 +52,7 @@ class PackedRTree {
     uint16_t _nodeSize;
     std::vector<uint64_t> _levelBounds;
     void init(const uint16_t nodeSize);
+    static std::vector<uint64_t> generateLevelBounds(const uint64_t numItems, const uint16_t nodeSize);
     void generateNodes();
     void fromData(const void *data);
 public:
@@ -59,6 +60,9 @@ public:
     PackedRTree(std::vector<Rect> &rects, Rect extent, const uint16_t nodeSize = 16);
     PackedRTree(const void *data, const uint64_t numItems, const uint16_t nodeSize = 16);
     std::vector<uint64_t> search(double minX, double minY, double maxX, double maxY) const;
+    static std::vector<uint64_t> streamSearch(
+        const uint64_t numItems, const uint16_t nodeSize, Rect r,
+        const std::function<void(uint8_t *, uint32_t, uint32_t)> &readNode);
     uint64_t size() const;
     static uint64_t size(const uint64_t numItems, const uint16_t nodeSize = 16);
     uint8_t *toData() const;
