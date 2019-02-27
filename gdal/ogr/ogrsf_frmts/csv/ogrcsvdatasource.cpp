@@ -909,6 +909,10 @@ OGRCSVDataSource::ICreateLayer( const char *pszLayerName,
     // What filename would we use?
     CPLString osFilename;
 
+    CPLDebug("CSV", "pszName: %s", pszName);
+    CPLDebug("CSV", "pszLayerName: %s", pszLayerName);
+
+
     if( osDefaultCSVName != "" )
     {
         osFilename = CPLFormFilename(pszName, osDefaultCSVName, nullptr);
@@ -918,6 +922,8 @@ OGRCSVDataSource::ICreateLayer( const char *pszLayerName,
     {
         osFilename = CPLFormFilename(pszName, pszLayerName, "csv");
     }
+
+    CPLDebug("CSV", "osFilename: %s", osFilename.c_str());
 
     // Does this directory/file already exist?
     if( VSIStatL(osFilename, &sStatBuf) == 0 )

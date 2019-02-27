@@ -73,7 +73,7 @@ class OGRFlatGeobufLayer : public OGRLayer
         flatbuffers::Offset<Geometry> writeGeometry(flatbuffers::FlatBufferBuilder& fbb, OGRGeometry* ogrGeometry);
     public:
         OGRFlatGeobufLayer(const Header*, const char* pszFilename, uint64_t offset);
-        OGRFlatGeobufLayer(const char *pszLayerName, OGRSpatialReference *poSpatialRef, OGRwkbGeometryType eGType);
+        OGRFlatGeobufLayer(const char *pszLayerName, const char *pszFilename, OGRSpatialReference *poSpatialRef, OGRwkbGeometryType eGType);
         virtual ~OGRFlatGeobufLayer();
 
         virtual OGRFeature *GetFeature(GIntBig nFeatureId) override;
@@ -91,6 +91,7 @@ class OGRFlatGeobufDataset final: public GDALDataset
 {
     private:
         const char *m_pszName = nullptr;
+        const char *m_pszFilename = nullptr;
         std::vector<std::unique_ptr<OGRLayer>> m_apoLayers;
         bool m_create = false;
     public:

@@ -61,6 +61,7 @@ OGRFlatGeobufLayer::OGRFlatGeobufLayer(const Header *poHeader, const char* pszFi
 
 OGRFlatGeobufLayer::OGRFlatGeobufLayer(
     const char *pszLayerName,
+    const char *pszFilename,
     OGRSpatialReference *poSpatialRef,
     OGRwkbGeometryType eGType)
 {
@@ -68,6 +69,7 @@ OGRFlatGeobufLayer::OGRFlatGeobufLayer(
 
     // TODO: free
     m_pszLayerName = CPLStrdup(pszLayerName);
+    m_pszFilename = CPLStrdup(pszFilename);
     m_create = true;
     m_geometryType = OGRFlatGeobufDataset::toGeometryType(eGType);
     m_poSRS = poSpatialRef;
@@ -138,8 +140,16 @@ OGRFlatGeobufLayer::~OGRFlatGeobufLayer()
         CPLDebug("FlatGeobuf", "Request to create %zu features", m_featuresCount);
         size_t c;
 
-        const char *filename = CPLFormFilename("", m_pszLayerName, "fgb");
-        VSILFILE *fp = VSIFOpenL(filename, "wb");
+        //const char *filename = CPLFormFilename("", m_pszLayerName, "fgb");
+        CPLDebug("FlatGeobuf", "m_pszFilename: %s", m_pszFilename);
+        VSILFILE *fp = VSIFOpenL(m_pszFilename, "wb");
+
+        if(fp == nullptr) {
+            CPLError(CE_Failure, CPLE_OpenFailed,
+                        "Failed to create %s:\n%s",
+                        m_pszFilename, VSIStrerror(errno));
+            return;
+        }
 
         uint8_t magicbytes[4] = { 0x66, 0x67, 0x62, 0x00 };
         c = VSIFWriteL(&magicbytes, 4, 1, fp);

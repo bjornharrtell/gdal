@@ -85,6 +85,7 @@ OGRFlatGeobufDataset::OGRFlatGeobufDataset()
 
 OGRFlatGeobufDataset::OGRFlatGeobufDataset(const char *pszName)
 {
+    CPLDebug("FlatGeobuf", "Request to create dataset %s", pszName);
     m_create = true;
     m_pszName = pszName;
 }
@@ -142,8 +143,61 @@ GDALDataset *OGRFlatGeobufDataset::Create( const char *pszName,
                                         CPL_UNUSED GDALDataType eDT,
                                         char **papszOptions )
 {
-    auto poDS = new OGRFlatGeobufDataset(pszName);
-    return poDS;
+    // First, ensure there isn't any such file yet.
+    VSIStatBufL sStatBuf;
+
+    if (strcmp(pszName, "/dev/stdout") == 0)
+        pszName = "/vsistdout/";
+
+    if( VSIStatL(pszName, &sStatBuf) == 0 )
+    {
+        CPLError(CE_Failure, CPLE_AppDefined,
+                 "It seems a file system object called '%s' already exists.",
+                 pszName);
+
+        return nullptr;
+    }
+
+    // If the target is not a simple .fgb then create it as a directory.
+    CPLString osDirName;
+
+    if( EQUAL(CPLGetExtension(pszName), "fgb") )
+    {
+        osDirName = CPLGetPath(pszName);
+        if( osDirName == "" )
+            osDirName = ".";
+
+        // HACK: CPLGetPath("/vsimem/foo.fgb") = "/vsimem", but this is not
+        // recognized afterwards as a valid directory name.
+        if( osDirName == "/vsimem" )
+            osDirName = "/vsimem/";
+    }
+    else
+    {
+        if( STARTS_WITH(pszName, "/vsizip/"))
+        {
+            // Do nothing.
+        }
+        else if( !EQUAL(pszName, "/vsistdout/") &&
+                 VSIMkdir(pszName, 0755) != 0 )
+        {
+            CPLError(CE_Failure, CPLE_AppDefined,
+                     "Failed to create directory %s:\n%s",
+                     pszName, VSIStrerror(errno));
+            return nullptr;
+        }
+        osDirName = pszName;
+    }
+
+    if( EQUAL(CPLGetExtension(pszName), "fgb") )
+    {
+        return new OGRFlatGeobufDataset(pszName);
+    }
+
+    CPLError(CE_Failure, CPLE_AppDefined,
+                     "Creating empty dataset not yet implemented");
+
+    return nullptr;
 }
 
 OGRLayer* OGRFlatGeobufDataset::GetLayer( int iLayer ) {
@@ -234,7 +288,10 @@ OGRLayer* OGRFlatGeobufDataset::ICreateLayer( const char *pszLayerName,
     // What filename would we use?
     CPLString osFilename;
 
+    CPLDebug("FlatGeobuf", "m_pszName: %s", m_pszName);
+    CPLDebug("FlatGeobuf", "pszLayerName: %s", pszLayerName);
     osFilename = CPLFormFilename(m_pszName, pszLayerName, "fgb");
+    CPLDebug("FlatGeobuf", "osFilename: %s", osFilename.c_str());
 
     // Does this directory/file already exist?
     if( VSIStatL(osFilename, &sStatBuf) == 0 )
@@ -246,7 +303,7 @@ OGRLayer* OGRFlatGeobufDataset::ICreateLayer( const char *pszLayerName,
     }
 
     // Create a layer.
-    OGRFlatGeobufLayer *poLayer = new OGRFlatGeobufLayer(pszLayerName, poSpatialRef, eGType);
+    OGRFlatGeobufLayer *poLayer = new OGRFlatGeobufLayer(pszLayerName, m_pszName, poSpatialRef, eGType);
 
     m_apoLayers.push_back(
         std::unique_ptr<OGRLayer>(poLayer)
