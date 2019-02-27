@@ -43,7 +43,7 @@ import pytest
 
 def verify_flatgeobuf_copy(name, fids, names):
 
-    if gdaltest.fgbpoint_feat is None:
+    if gdaltest.features is None:
         print('Missing features collection')
         return False
 
@@ -74,9 +74,9 @@ def verify_flatgeobuf_copy(name, fids, names):
     ######################################################
     # Test geometries
     lyr.ResetReading()
-    for i in range(len(gdaltest.fgbpoint_feat)):
+    for i in range(len(gdaltest.features)):
 
-        orig_feat = gdaltest.fgbpoint_feat[i]
+        orig_feat = gdaltest.features[i]
         feat = lyr.GetNextFeature()
 
         if feat is None:
@@ -86,17 +86,17 @@ def verify_flatgeobuf_copy(name, fids, names):
         if ogrtest.check_feature_geometry(feat, orig_feat.GetGeometryRef(),
                                           max_error=0.001) != 0:
             print('Geometry test failed')
-            gdaltest.fgbpoint_feat = None
+            gdaltest.features = None
             return False
 
-    gdaltest.fgbpoint_feat = None
+    gdaltest.features = None
 
     lyr = None
 
     return True
 
 
-def copy_shape_to_flatgeobuf(name, compress=None):
+def copy_shape_to_flatgeobuf(name, wkbType, compress=None):
     if gdaltest.flatgeobuf_drv is None:
         return False
 
@@ -112,15 +112,13 @@ def copy_shape_to_flatgeobuf(name, compress=None):
     else:
         dst_name = os.path.join('tmp', name + '.fgb')
 
-    print dst_name
-
     ds = gdaltest.flatgeobuf_drv.CreateDataSource(dst_name)
     if ds is None:
         return False
 
     ######################################################
     # Create layer
-    lyr = ds.CreateLayer(name, None, ogr.wkbPoint)
+    lyr = ds.CreateLayer(name, None, wkbType)
     if lyr is None:
         return False
 
@@ -131,7 +129,7 @@ def copy_shape_to_flatgeobuf(name, compress=None):
                                     ('NAME', ogr.OFTString)])
 
     ######################################################
-    # Copy in gjpoint.shp
+    # Copy in shp
 
     dst_feat = ogr.Feature(feature_def=lyr.GetLayerDefn())
 
@@ -140,10 +138,10 @@ def copy_shape_to_flatgeobuf(name, compress=None):
     shp_lyr = shp_ds.GetLayer(0)
 
     feat = shp_lyr.GetNextFeature()
-    gdaltest.fgbpoint_feat = []
+    gdaltest.features = []
 
     while feat is not None:
-        gdaltest.fgbpoint_feat.append(feat)
+        gdaltest.features.append(feat)
 
         dst_feat.SetFrom(feat)
         lyr.CreateFeature(dst_feat)
@@ -172,18 +170,18 @@ def test_ogr_flatgeobuf_9():
         pytest.skip()
 
     gdaltest.tests = [
-        ['gjpoint', [1], ['Point 1']],
-        #['gjline', [1], ['Line 1']],
-        #['gjpoly', [1], ['Polygon 1']],
-        #['fgbmultipoint', [1], ['MultiPoint 1']],
-        #['fgbmultiline', [2], ['MultiLine 1']],
-        #['fgbmultipoly', [2], ['MultiPoly 1']]
+        ['gjpoint', [1], ['Point 1'], ogr.wkbPoint],
+        ['gjline', [1], ['Line 1'], ogr.wkbLineString],
+        ['gjpoly', [1], ['Polygon 1'], ogr.wkbPolygon],
+        ['fgbmultipoint', [1], ['MultiPoint 1'], ogr.wkbMultiPoint],
+        ['fgbmultiline', [2], ['MultiLine 1'], ogr.wkbMultiLineString],
+        ['fgbmultipoly', [2], ['MultiPoly 1'], ogr.wkbMultiPolygon]
     ]
 
     for i in range(len(gdaltest.tests)):
         test = gdaltest.tests[i]
 
-        rc = copy_shape_to_flatgeobuf(test[0])
+        rc = copy_shape_to_flatgeobuf(test[0], test[3])
         assert rc, ('Failed making copy of ' + test[0] + '.shp')
 
         rc = verify_flatgeobuf_copy(test[0], test[1], test[2])
