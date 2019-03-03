@@ -59,6 +59,7 @@ class OGRFlatGeobufLayer : public OGRLayer
         OGRPoint *readPoint(const double *coords, uint8_t dimensions, uint32_t offset = 0);
         OGRMultiPoint *readMultiPoint(const double *coords, uint32_t coordsLength, uint8_t dimensions);
         OGRLineString *readLineString(const double *coords, uint32_t coordsLength, uint8_t dimensions, uint32_t offset = 0);
+        OGRMultiLineString *readMultiLineString(const double *coords, const flatbuffers::Vector<uint32_t> *lengths, uint8_t dimensions);
         OGRLinearRing *readLinearRing(const double *coords, uint32_t coordsLength, uint8_t dimensions, uint32_t offset = 0);
         OGRPolygon *readPolygon(const double *coords, uint32_t coordsLength, const flatbuffers::Vector<uint32_t> *ringLengths, uint8_t dimensions);
         OGRGeometry *readGeometry(const Geometry* geometry, uint8_t dimensions);
@@ -72,6 +73,7 @@ class OGRFlatGeobufLayer : public OGRLayer
         void writePoint(OGRPoint *p, std::vector<double> &coords);
         void writeMultiPoint(OGRMultiPoint *mp, std::vector<double> &coords);
         uint32_t writeLineString(OGRLineString *ls, std::vector<double> &coords);
+        void writeMultiLineString(OGRMultiLineString *mls, std::vector<double> &coords, std::vector<uint32_t> &lengths);
         void writePolygon(OGRPolygon *p, std::vector<double> &coords, std::vector<uint32_t> &ringLengths);
         flatbuffers::Offset<Geometry> writeGeometry(flatbuffers::FlatBufferBuilder& fbb, OGRGeometry* ogrGeometry);
     public:

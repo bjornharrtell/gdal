@@ -438,6 +438,19 @@ OGRLineString *OGRFlatGeobufLayer::readLineString(const double *coords, uint32_t
     return ls;
 }
 
+OGRMultiLineString *OGRFlatGeobufLayer::readMultiLineString(const double *coords, const flatbuffers::Vector<uint32_t> *lengths, uint8_t dimensions)
+{
+    auto mls = new OGRMultiLineString();
+    uint32_t offset = 0;
+    for (size_t i = 0; i < lengths->size(); i++) {
+        auto length = lengths->Get(i);
+        auto ls = readLineString(coords, length, dimensions, offset);
+        mls->addGeometryDirectly(ls);
+        offset += length;
+    }
+    return mls;
+}
+
 OGRLinearRing *OGRFlatGeobufLayer::readLinearRing(const double *coords, uint32_t coordsLength, uint8_t dimensions, uint32_t offset)
 {
     auto ls = new OGRLinearRing();
@@ -495,6 +508,8 @@ OGRGeometry *OGRFlatGeobufLayer::readGeometry(const Geometry *geometry, uint8_t 
             return readMultiPoint(coords, coordsLength, dimensions);
         case GeometryType::LineString:
             return readLineString(coords, coordsLength, dimensions);
+        case GeometryType::MultiLineString:
+            return readMultiLineString(coords, geometry->lengths(), dimensions);
         case GeometryType::Polygon:
             return readPolygon(coords, coordsLength, geometry->ring_lengths(), dimensions);
         default:
@@ -633,6 +648,15 @@ uint32_t OGRFlatGeobufLayer::writeLineString(OGRLineString *ls, std::vector<doub
     return length;
 }
 
+void OGRFlatGeobufLayer::writeMultiLineString(OGRMultiLineString *mls, std::vector<double> &coords, std::vector<uint32_t> &lengths)
+{
+    uint32_t length;
+    for (int i = 0; i < mls->getNumGeometries(); i++) {
+        length = writeLineString(mls->getGeometryRef(i)->toLineString(), coords);
+        lengths.push_back(length);
+    }
+}
+
 void OGRFlatGeobufLayer::writePolygon(OGRPolygon *p, std::vector<double> &coords, std::vector<uint32_t> &ringLengths)
 {
     auto length = writeLineString(p->getExteriorRing(), coords);
@@ -663,6 +687,9 @@ Offset<Geometry> OGRFlatGeobufLayer::writeGeometry(FlatBufferBuilder &fbb, OGRGe
             break;
         case GeometryType::LineString:
             writeLineString(ogrGeometry->toLineString(), coords);
+            break;
+        case GeometryType::MultiLineString:
+            writeMultiLineString(ogrGeometry->toMultiLineString(), coords, lengths);
             break;
         case GeometryType::Polygon:
             writePolygon(ogrGeometry->toPolygon(), coords, ringLengths);
