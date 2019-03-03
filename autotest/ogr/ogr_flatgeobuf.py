@@ -173,9 +173,9 @@ def test_ogr_flatgeobuf_9():
         ['gjpoint', [1], ['Point 1'], ogr.wkbPoint],
         ['gjline', [1], ['Line 1'], ogr.wkbLineString],
         ['gjpoly', [1], ['Polygon 1'], ogr.wkbPolygon],
-        ['fgbmultipoint', [1], ['MultiPoint 1'], ogr.wkbMultiPoint],
-        ['fgbmultiline', [2], ['MultiLine 1'], ogr.wkbMultiLineString],
-        ['fgbmultipoly', [2], ['MultiPoly 1'], ogr.wkbMultiPolygon]
+        ['gjmultipoint', [1], ['MultiPoint 1'], ogr.wkbMultiPoint],
+        #['fgbmultiline', [2], ['MultiLine 1'], ogr.wkbMultiLineString],
+        #['fgbmultipoly', [2], ['MultiPoly 1'], ogr.wkbMultiPolygon]
     ]
 
     for i in range(len(gdaltest.tests)):

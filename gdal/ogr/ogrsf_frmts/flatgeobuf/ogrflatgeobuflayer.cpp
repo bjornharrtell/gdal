@@ -325,6 +325,11 @@ OGRFeature *OGRFlatGeobufLayer::GetNextFeature()
     //CPLDebug("FlatGeobuf", "fid: %zu", fid);
     auto geometry = feature->geometry();
     auto ogrGeometry = readGeometry(geometry, m_dimensions);
+#ifdef DEBUG
+    char *wkt;
+    ogrGeometry->exportToWkt(&wkt);
+    CPLDebug("FlatGeobuf", "readGeometry as wkt: %s", wkt);
+#endif
     // TODO: find out why this is done in other drivers
     //if (poSRS != nullptr)
     //    ogrGeometry->assignSpatialReference(poSRS);
@@ -385,6 +390,25 @@ void OGRFlatGeobufLayer::ensurePadfBuffers(size_t count, uint8_t dimensions)
         if (dimensions > 3)
             m_padfM = static_cast<double *>(CPLRealloc(m_padfM, m_padfSize));
     }
+}
+
+OGRPoint *OGRFlatGeobufLayer::readPoint(const double *coords, uint8_t dimensions, uint32_t offset)
+{
+    if (dimensions == 2)
+        return new OGRPoint { coords[offset + 0], coords[offset + 1] };
+    else if (dimensions == 3)
+        return new OGRPoint { coords[offset + 0], coords[offset + 1], coords[offset + 2] };
+    else if (dimensions == 4)
+        return new OGRPoint { coords[offset + 0], coords[offset + 1], coords[offset + 2], coords[offset + 3] };
+    throw std::runtime_error("Unsupported number of dimensions");
+}
+
+OGRMultiPoint *OGRFlatGeobufLayer::readMultiPoint(const double *coords, uint32_t coordsLength, uint8_t dimensions)
+{
+    auto mp = new OGRMultiPoint();
+    for (size_t i = 0; i < coordsLength; i = i + dimensions)
+        mp->addGeometryDirectly(readPoint(coords, dimensions, i));
+    return mp;
 }
 
 OGRLineString *OGRFlatGeobufLayer::readLineString(const double *coords, uint32_t coordsLength, uint8_t dimensions, uint32_t offset)
@@ -466,13 +490,15 @@ OGRGeometry *OGRFlatGeobufLayer::readGeometry(const Geometry *geometry, uint8_t 
     auto coordsLength = pCoords->size();
     switch (m_geometryType) {
         case GeometryType::Point:
-            return new OGRPoint { coords[0], coords[1] };
+            return readPoint(coords, dimensions);
+        case GeometryType::MultiPoint:
+            return readMultiPoint(coords, coordsLength, dimensions);
         case GeometryType::LineString:
             return readLineString(coords, coordsLength, dimensions);
         case GeometryType::Polygon:
             return readPolygon(coords, coordsLength, geometry->ring_lengths(), dimensions);
         default:
-            throw std::invalid_argument("Unknown geometry type");
+            throw std::runtime_error("Unknown geometry type");
     }
 }
 
@@ -552,6 +578,11 @@ OGRErr OGRFlatGeobufLayer::ICreateFeature(OGRFeature *poNewFeature)
     }
 
     auto ogrGeometry = poNewFeature->GetGeometryRef();
+#ifdef DEBUG
+    char *wkt;
+    ogrGeometry->exportToWkt(&wkt);
+    CPLDebug("FlatGeobuf", "poNewFeature as wkt: %s", wkt);
+#endif
     auto geometry = writeGeometry(fbb, ogrGeometry);
     auto pValues = values.size() == 0 ? nullptr : &values;
     auto feature = CreateFeatureDirect(fbb, fid, geometry, pValues);
@@ -582,6 +613,12 @@ void OGRFlatGeobufLayer::writePoint(OGRPoint *p, std::vector<double> &coords)
 {
     coords.push_back(p->getX());
     coords.push_back(p->getY());
+}
+
+void OGRFlatGeobufLayer::writeMultiPoint(OGRMultiPoint *mp, std::vector<double> &coords)
+{
+    for (int i = 0; i < mp->getNumGeometries(); i++)
+        writePoint(mp->getGeometryRef(i)->toPoint(), coords);
 }
 
 uint32_t OGRFlatGeobufLayer::writeLineString(OGRLineString *ls, std::vector<double> &coords)
@@ -621,6 +658,9 @@ Offset<Geometry> OGRFlatGeobufLayer::writeGeometry(FlatBufferBuilder &fbb, OGRGe
         case GeometryType::Point:
             writePoint(ogrGeometry->toPoint(), coords);
             break;
+        case GeometryType::MultiPoint:
+            writeMultiPoint(ogrGeometry->toMultiPoint(), coords);
+            break;
         case GeometryType::LineString:
             writeLineString(ogrGeometry->toLineString(), coords);
             break;
@@ -628,7 +668,7 @@ Offset<Geometry> OGRFlatGeobufLayer::writeGeometry(FlatBufferBuilder &fbb, OGRGe
             writePolygon(ogrGeometry->toPolygon(), coords, ringLengths);
             break;
         default:
-            throw std::invalid_argument("Unknown geometry type");
+            throw std::runtime_error("Unknown geometry type");
     }
     auto pLengths = lengths.size() == 0 ? nullptr : &lengths;
     auto pRingLengths = ringLengths.size() == 0 ? nullptr : &ringLengths;

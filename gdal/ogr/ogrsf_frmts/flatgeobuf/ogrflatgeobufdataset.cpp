@@ -234,10 +234,11 @@ GeometryType OGRFlatGeobufDataset::toGeometryType(OGRwkbGeometryType eGType)
 {
     switch (eGType) {
         case OGRwkbGeometryType::wkbPoint: return GeometryType::Point;
+        case OGRwkbGeometryType::wkbMultiPoint: return GeometryType::MultiPoint;
         case OGRwkbGeometryType::wkbLineString: return GeometryType::LineString;
         case OGRwkbGeometryType::wkbPolygon: return GeometryType::Polygon;
         default:
-            throw std::invalid_argument("Unknown geometry type");
+            throw std::runtime_error("Unknown geometry type");
     }
 }
 
@@ -245,10 +246,11 @@ OGRwkbGeometryType OGRFlatGeobufDataset::toOGRwkbGeometryType(GeometryType geome
 {
     switch (geometryType) {
         case GeometryType::Point: return OGRwkbGeometryType::wkbPoint;
+        case GeometryType::MultiPoint: return OGRwkbGeometryType::wkbMultiPoint;
         case GeometryType::LineString: return OGRwkbGeometryType::wkbLineString;
         case GeometryType::Polygon: return OGRwkbGeometryType::wkbPolygon;
         default:
-            throw std::invalid_argument("Unknown geometry type");
+            throw std::runtime_error("Unknown geometry type");
     }
 }
 
