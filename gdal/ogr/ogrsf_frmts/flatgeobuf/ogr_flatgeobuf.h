@@ -61,7 +61,8 @@ class OGRFlatGeobufLayer : public OGRLayer
         OGRLineString *readLineString(const double *coords, uint32_t coordsLength, uint8_t dimensions, uint32_t offset = 0);
         OGRMultiLineString *readMultiLineString(const double *coords, const flatbuffers::Vector<uint32_t> *lengths, uint8_t dimensions);
         OGRLinearRing *readLinearRing(const double *coords, uint32_t coordsLength, uint8_t dimensions, uint32_t offset = 0);
-        OGRPolygon *readPolygon(const double *coords, uint32_t coordsLength, const flatbuffers::Vector<uint32_t> *ringLengths, uint8_t dimensions);
+        OGRPolygon *readPolygon(const double *coords, uint32_t coordsLength, const flatbuffers::Vector<uint32_t> *ringLengths, uint8_t dimensions, uint32_t offset = 0);
+        OGRMultiPolygon *readMultiPolygon(const double *coords, const flatbuffers::Vector<uint32_t> *lengths, const flatbuffers::Vector<uint32_t> *ringLengths, uint8_t dimensions);
         OGRGeometry *readGeometry(const Geometry* geometry, uint8_t dimensions);
         ColumnType toColumnType(OGRFieldType fieldType, OGRFieldSubType subType);
         OGRFieldType toOGRFieldType(ColumnType type);
@@ -74,7 +75,8 @@ class OGRFlatGeobufLayer : public OGRLayer
         void writeMultiPoint(OGRMultiPoint *mp, std::vector<double> &coords);
         uint32_t writeLineString(OGRLineString *ls, std::vector<double> &coords);
         void writeMultiLineString(OGRMultiLineString *mls, std::vector<double> &coords, std::vector<uint32_t> &lengths);
-        void writePolygon(OGRPolygon *p, std::vector<double> &coords, std::vector<uint32_t> &ringLengths);
+        uint32_t writePolygon(OGRPolygon *p, std::vector<double> &coords, std::vector<uint32_t> &ringLengths);
+        void writeMultiPolygon(OGRMultiPolygon *mp, std::vector<double> &coords, std::vector<uint32_t> &lengths, std::vector<uint32_t> &ringLengths);
         flatbuffers::Offset<Geometry> writeGeometry(flatbuffers::FlatBufferBuilder& fbb, OGRGeometry* ogrGeometry);
     public:
         OGRFlatGeobufLayer(const Header*, const char* pszFilename, uint64_t offset);
