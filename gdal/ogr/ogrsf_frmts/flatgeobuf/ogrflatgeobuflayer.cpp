@@ -493,15 +493,31 @@ OGRPolygon *OGRFlatGeobufLayer::readPolygon(const double *coords, uint32_t coord
     return p;
 }
 
-OGRMultiPolygon *OGRFlatGeobufLayer::readMultiPolygon(const double *coords, const flatbuffers::Vector<uint32_t> *lengths, const Vector<uint32_t> *ringLengths, uint8_t dimensions)
+OGRMultiPolygon *OGRFlatGeobufLayer::readMultiPolygon(
+    const double *coords,
+    uint32_t coordsLength,
+    const Vector<uint32_t> *lengths,
+    const Vector<uint32_t> *ringCounts,
+    const Vector<uint32_t> *ringLengths,
+    uint8_t dimensions)
 {
     auto mp = new OGRMultiPolygon();
-    uint32_t offset = 0;
-    for (size_t i = 0; i < lengths->size(); i++) {
-        auto length = lengths->Get(i);
-        auto p = readPolygon(coords, length, ringLengths, dimensions, offset);
-        mp->addGeometryDirectly(p);
-        offset += length;
+    if (lengths == nullptr || lengths->size() < 2) {
+        mp->addGeometryDirectly(readPolygon(coords, coordsLength, ringLengths, dimensions));
+    } else {
+        uint32_t offset = 0;
+        for (size_t i = 0; i < lengths->size(); i++) {
+            auto p = new OGRPolygon();
+            uint32_t ringCount = ringCounts->Get(i);
+            size_t roffset = 0;
+            for (size_t j=0; j < ringCount; j++) {
+                uint32_t ringLength = ringLengths->Get(j+roffset);
+                p->addRingDirectly(readLinearRing(coords, ringLength, dimensions, offset));
+                offset += ringLength;
+                roffset++;
+            }
+            mp->addGeometryDirectly(p);
+        }
     }
     return mp;
 }
@@ -525,7 +541,7 @@ OGRGeometry *OGRFlatGeobufLayer::readGeometry(const Geometry *geometry, uint8_t 
         case GeometryType::Polygon:
             return readPolygon(coords, coordsLength, geometry->ring_lengths(), dimensions);
         case GeometryType::MultiPolygon:
-            return readMultiPolygon(coords, geometry->lengths(), geometry->ring_lengths(), dimensions);
+            return readMultiPolygon(coords, coordsLength, geometry->lengths(), geometry->ring_counts(), geometry->ring_lengths(), dimensions);
         default:
             throw std::runtime_error("Unknown geometry type");
     }
@@ -668,13 +684,18 @@ void OGRFlatGeobufLayer::writeMultiLineString(OGRMultiLineString *mls, std::vect
         lengths.push_back(writeLineString(mls->getGeometryRef(i)->toLineString(), coords));
 }
 
-uint32_t OGRFlatGeobufLayer::writePolygon(OGRPolygon *p, std::vector<double> &coords, std::vector<uint32_t> &ringLengths)
+uint32_t OGRFlatGeobufLayer::writePolygon(
+    OGRPolygon *p,
+    std::vector<double> &coords,
+    std::vector<uint32_t> &ringCounts,
+    std::vector<uint32_t> &ringLengths)
 {
     auto length = writeLineString(p->getExteriorRing(), coords);
     auto ringCount = p->getNumInteriorRings();
+    ringCounts.push_back(ringCount + 1);
+    ringLengths.push_back(length);
     if (ringCount == 0)
         return length;
-    ringLengths.push_back(length);
     for (int i = 0; i < ringCount; i++) {
         auto ringLength = writeLineString(p->getInteriorRing(i), coords);
         ringLengths.push_back(ringLength);
@@ -683,10 +704,15 @@ uint32_t OGRFlatGeobufLayer::writePolygon(OGRPolygon *p, std::vector<double> &co
     return length;
 }
 
-void OGRFlatGeobufLayer::writeMultiPolygon(OGRMultiPolygon *mp, std::vector<double> &coords, std::vector<uint32_t> &lengths, std::vector<uint32_t> &ringLengths)
+void OGRFlatGeobufLayer::writeMultiPolygon(
+    OGRMultiPolygon *mp,
+    std::vector<double> &coords,
+    std::vector<uint32_t> &lengths,
+    std::vector<uint32_t> &ringCounts,
+    std::vector<uint32_t> &ringLengths)
 {
     for (int i = 0; i < mp->getNumGeometries(); i++)
-        lengths.push_back(writePolygon(mp->getGeometryRef(i)->toPolygon(), coords, ringLengths));
+        lengths.push_back(writePolygon(mp->getGeometryRef(i)->toPolygon(), coords, ringCounts, ringLengths));
 }
 
 Offset<Geometry> OGRFlatGeobufLayer::writeGeometry(FlatBufferBuilder &fbb, OGRGeometry *ogrGeometry)
@@ -711,10 +737,10 @@ Offset<Geometry> OGRFlatGeobufLayer::writeGeometry(FlatBufferBuilder &fbb, OGRGe
             writeMultiLineString(ogrGeometry->toMultiLineString(), coords, lengths);
             break;
         case GeometryType::Polygon:
-            writePolygon(ogrGeometry->toPolygon(), coords, ringLengths);
+            writePolygon(ogrGeometry->toPolygon(), coords, ringCounts, ringLengths);
             break;
         case GeometryType::MultiPolygon:
-            writeMultiPolygon(ogrGeometry->toMultiPolygon(), coords, lengths, ringLengths);
+            writeMultiPolygon(ogrGeometry->toMultiPolygon(), coords, lengths, ringCounts, ringLengths);
             break;
         default:
             throw std::runtime_error("Unknown geometry type");

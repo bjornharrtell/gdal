@@ -25,7 +25,6 @@
     --without-kakadu \
     --without-libgrass \
     --without-libkml \
-    --without-libtool \
     --without-mrf \
     --without-mrsid \
     --without-mysql \
@@ -49,4 +48,5 @@
     --with-spatialite \
     --with-sqlite3 \
     --with-threads \
-    --with-hide-internal-symbols=yes
+    --with-hide-internal-symbols=yes \
+    --with-python=yes
