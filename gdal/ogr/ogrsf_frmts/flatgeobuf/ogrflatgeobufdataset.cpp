@@ -83,11 +83,11 @@ OGRFlatGeobufDataset::OGRFlatGeobufDataset()
 
 }
 
-OGRFlatGeobufDataset::OGRFlatGeobufDataset(const char *pszName)
+OGRFlatGeobufDataset::OGRFlatGeobufDataset(const char *osDirName)
 {
-    CPLDebug("FlatGeobuf", "Request to create dataset %s", pszName);
+    CPLDebug("FlatGeobuf", "Request to create dataset %s", osDirName);
     m_create = true;
-    m_pszName = pszName;
+    m_pszName = CPLStrdup(osDirName);
 }
 
 /************************************************************************/
@@ -191,7 +191,7 @@ GDALDataset *OGRFlatGeobufDataset::Create( const char *pszName,
 
     if( EQUAL(CPLGetExtension(pszName), "fgb") )
     {
-        return new OGRFlatGeobufDataset(pszName);
+        return new OGRFlatGeobufDataset(osDirName);
     }
 
     CPLError(CE_Failure, CPLE_AppDefined,
@@ -309,7 +309,7 @@ OGRLayer* OGRFlatGeobufDataset::ICreateLayer( const char *pszLayerName,
     }
 
     // Create a layer.
-    OGRFlatGeobufLayer *poLayer = new OGRFlatGeobufLayer(pszLayerName, m_pszName, poSpatialRef, eGType);
+    OGRFlatGeobufLayer *poLayer = new OGRFlatGeobufLayer(pszLayerName, osFilename, poSpatialRef, eGType);
 
     m_apoLayers.push_back(
         std::unique_ptr<OGRLayer>(poLayer)
