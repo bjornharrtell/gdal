@@ -1,4 +1,5 @@
 #include "ogrsf_frmts.h"
+#include "cpl_vsi_virtual.h"
 #include "cpl_conv.h"
 #include "cpl_json.h"
 #include "cpl_http.h"
@@ -234,6 +235,7 @@ void OGRFlatGeobufLayer::processSpatialIndex() {
         if (m_poFp == nullptr) {
             CPLDebug("FlatGeobuf", "processSpatialIndex (will attempt to open file %s)", m_pszFilename);
             m_poFp = VSIFOpenL(m_pszFilename, "rb");
+            //m_poFp = (VSILFILE*) VSICreateCachedFile ( (VSIVirtualHandle*) m_poFp);
         }
         VSIFSeekL(m_poFp, 4, SEEK_SET); // skip magic bytes
         uint32_t headerSize;
@@ -276,6 +278,8 @@ OGRFeature *OGRFlatGeobufLayer::GetNextFeature()
     if (m_poFp == nullptr) {
         CPLDebug("FlatGeobuf", "Iteration start (will attempt to open file %s)", m_pszFilename);
         m_poFp = VSIFOpenL(m_pszFilename, "rb");
+        //m_poFp = (VSILFILE*) VSICreateCachedFile ( (VSIVirtualHandle*) m_poFp);
+
         processSpatialIndex();
         if (m_featuresCount == 0) {
             CPLDebug("FlatGeobuf", "No features found");
