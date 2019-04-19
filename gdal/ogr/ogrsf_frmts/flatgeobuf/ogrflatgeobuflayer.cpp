@@ -72,6 +72,7 @@ OGRFlatGeobufLayer::OGRFlatGeobufLayer(
     m_pszLayerName = CPLStrdup(pszLayerName);
     m_pszFilename = CPLStrdup(pszFilename);
     m_create = true;
+    m_eGType = eGType;
     m_geometryType = OGRFlatGeobufDataset::toGeometryType(eGType);
     m_poSRS = poSpatialRef;
 
@@ -312,14 +313,14 @@ OGRFeature *OGRFlatGeobufLayer::GetNextFeature()
     VSIFReadL(m_featureBuf, 1, m_featureSize, m_poFp);
 
 #ifdef DEBUG
-    const uint8_t * vBuf = const_cast<const uint8_t *>(reinterpret_cast<uint8_t *>(featureBuf));
-    Verifier v(vBuf, featureSize);
+    const uint8_t * vBuf = const_cast<const uint8_t *>(reinterpret_cast<uint8_t *>(m_featureBuf));
+    Verifier v(vBuf, m_featureSize);
     auto ok = VerifyFeatureBuffer(v);
     if (!ok) {
         CPLDebug("FlatGeobuf", "VerifyFeatureBuffer says not ok");
         CPLDebug("FlatGeobuf", "m_offset: %zu", m_offset);
         CPLDebug("FlatGeobuf", "m_featuresPos: %zu", m_featuresPos);
-        CPLDebug("FlatGeobuf", "featureSize: %d", featureSize);
+        CPLDebug("FlatGeobuf", "featureSize: %d", m_featureSize);
     }
 #endif
 
@@ -723,6 +724,8 @@ Offset<Geometry> OGRFlatGeobufLayer::writeGeometry(FlatBufferBuilder &fbb, OGRGe
 {
     if (ogrGeometry == nullptr)
         return 0;
+    if (ogrGeometry->getGeometryType() != m_eGType)
+        throw std::runtime_error("Mismatched geometry type");
     std::vector<double> coords;
     std::vector<uint32_t> lengths;
     std::vector<uint32_t> ringLengths;

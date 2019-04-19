@@ -25,6 +25,7 @@ class OGRFlatGeobufLayer : public OGRLayer
         const char *m_pszLayerName = nullptr;
 
         const Header *m_poHeader = nullptr;
+        OGRwkbGeometryType m_eGType;
         GeometryType m_geometryType;
         uint8_t m_dimensions = 2;
         uint64_t m_featuresCount = 0;

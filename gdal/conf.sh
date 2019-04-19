@@ -1,7 +1,8 @@
 #!/bin/sh
-#./configure --enable-debug \
-./configure \
+./configure --enable-debug \
     --with-geos \
+    --enable-shared=no \
+    --without-ld-shared \
     --without-bsb \
     --without-cfitsio \
     --without-cryptopp \
@@ -48,5 +49,5 @@
     --with-spatialite \
     --with-sqlite3 \
     --with-threads \
-    --with-hide-internal-symbols=yes \
-    --with-python=yes
+    --with-hide-internal-symbols=yes
+#    --with-python=yes
