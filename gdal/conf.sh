@@ -1,8 +1,5 @@
 #!/bin/sh
-./configure --enable-debug \
-    --with-geos \
-    --enable-shared=no \
-    --without-ld-shared \
+./configure --prefix=/home/bjorn/temp/gdal --with-geos \
     --without-bsb \
     --without-cfitsio \
     --without-cryptopp \

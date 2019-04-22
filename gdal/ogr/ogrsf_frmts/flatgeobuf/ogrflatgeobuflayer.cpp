@@ -232,6 +232,7 @@ OGRFeature *OGRFlatGeobufLayer::GetFeature(GIntBig nFeatureId)
 
 void OGRFlatGeobufLayer::processSpatialIndex() {
     if (m_poFilterGeom != nullptr && !m_processedSpatialIndex) {
+        CPLDebug("FlatGeobuf", "Will do spatial index search");
         m_processedSpatialIndex = true;
         if (m_poFp == nullptr) {
             CPLDebug("FlatGeobuf", "processSpatialIndex (will attempt to open file %s)", m_pszFilename);
@@ -246,17 +247,23 @@ void OGRFlatGeobufLayer::processSpatialIndex() {
         OGREnvelope env;
         m_poFilterGeom->getEnvelope(&env);
         Rect r { env.MinX, env.MinY, env.MaxX, env.MaxY };
+        CPLDebug("FlatGeobuf", "Spatial index search on %f,%f,%f,%f", env.MinX, env.MinY, env.MaxX, env.MaxY);
         auto readNode = [this, headerSize] (uint8_t *buf, uint32_t i, uint32_t s) {
             VSIFSeekL(m_poFp, 4 + 4 + headerSize + i, SEEK_SET);
             VSIFReadL(buf, 1, s, m_poFp);
         };
         m_foundFeatureIndices = PackedRTree::streamSearch(featuresCount, 16, r, readNode);
         m_featuresCount = m_foundFeatureIndices.size();
-        if (m_featuresCount == 0)
+        if (m_featuresCount == 0) {
+            CPLDebug("FlatGeobuf", "No found features in spatial index search");
             return;
+        }
+        CPLDebug("FlatGeobuf", "%d features found in spatial index search", m_featuresCount);
         m_featureOffsets = static_cast<uint64_t *>(VSI_MALLOC_VERBOSE(featuresCount * 8));
         VSIFSeekL(m_poFp, 4 + 4 + headerSize + treeSize, SEEK_SET);
         VSIFReadL(m_featureOffsets, 8, featuresCount, m_poFp);
+    } else {
+        CPLDebug("FlatGeobuf", "processSpatialIndex noop");
     }
 }
 
@@ -791,5 +798,6 @@ void OGRFlatGeobufLayer::ResetReading()
     CPLDebug("FlatGeobuf", "ResetReading");
     m_offset = m_offsetInit;
     m_featuresPos = 0;
+    m_processedSpatialIndex = false;
     return;
 }
