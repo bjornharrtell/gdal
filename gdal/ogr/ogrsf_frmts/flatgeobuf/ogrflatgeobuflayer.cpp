@@ -169,7 +169,7 @@ OGRFlatGeobufLayer::~OGRFlatGeobufLayer()
 
         FlatBufferBuilder fbb;
         auto columns = writeColumns(fbb);
-        Offset<Index> index = 0;
+        Offset<Index> index = CreateIndex(fbb, 16, m_featuresCount);
         Offset<Srs> srs = 0;
         // TODO: this can crash for some inputs
         /*if (m_poSRS != nullptr) {
