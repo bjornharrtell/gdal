@@ -258,7 +258,7 @@ void OGRFlatGeobufLayer::processSpatialIndex() {
             CPLDebug("FlatGeobuf", "No found features in spatial index search");
             return;
         }
-        CPLDebug("FlatGeobuf", "%d features found in spatial index search", m_featuresCount);
+        CPLDebug("FlatGeobuf", "%zu features found in spatial index search", m_featuresCount);
         m_featureOffsets = static_cast<uint64_t *>(VSI_MALLOC_VERBOSE(featuresCount * 8));
         VSIFSeekL(m_poFp, 4 + 4 + headerSize + treeSize, SEEK_SET);
         VSIFReadL(m_featureOffsets, 8, featuresCount, m_poFp);
@@ -561,7 +561,7 @@ OGRGeometry *OGRFlatGeobufLayer::readGeometry(const Geometry *geometry, uint8_t 
 
 OGRErr OGRFlatGeobufLayer::CreateField(OGRFieldDefn *poField, int bApproxOK)
 {
-    CPLDebug("FlatGeobuf", "CreateField");
+    CPLDebug("FlatGeobuf", "CreateField %s %s", poField->GetNameRef(), poField->GetFieldTypeName(poField->GetType()));
     if(!TestCapability(OLCCreateField))
     {
         CPLError(CE_Failure, CPLE_AppDefined,
@@ -583,26 +583,27 @@ OGRErr OGRFlatGeobufLayer::ICreateFeature(OGRFeature *poNewFeature)
     std::vector<Offset<Value>> values;
     FlatBufferBuilder fbb;
 
-    uint16_t column_index = 0;
-    int8_t byte_value = 0;
-    int8_t ubyte_value = 0;
-    bool bool_value = false;
-    int16_t short_value = 0;
-    uint16_t ushort_value = 0;
-    int32_t int_value = 0;
-    uint32_t uint_value = 0;
-    int64_t long_value = 0;
-    uint64_t ulong_value = 0;
-    float float_value = 0.0f;
-    double double_value = 0.0;
-    const char *string_value = nullptr;
-    const char *json_value = nullptr;
-    const char *datetime_value = nullptr;
-
     for (int i = 0; i < m_poFeatureDefn->GetFieldCount(); i++) {
         auto fieldDef = m_poFeatureDefn->GetFieldDefn(i);
         if (poNewFeature->IsFieldNull(i))
             continue;
+
+        uint16_t column_index = 0;
+        int8_t byte_value = 0;
+        int8_t ubyte_value = 0;
+        bool bool_value = false;
+        int16_t short_value = 0;
+        uint16_t ushort_value = 0;
+        int32_t int_value = 0;
+        uint32_t uint_value = 0;
+        int64_t long_value = 0;
+        uint64_t ulong_value = 0;
+        float float_value = 0.0f;
+        double double_value = 0.0;
+        const char *string_value = nullptr;
+        const char *json_value = nullptr;
+        const char *datetime_value = nullptr;
+
         column_index = i;
 
         auto fieldType = fieldDef->GetType();
@@ -636,9 +637,9 @@ OGRErr OGRFlatGeobufLayer::ICreateFeature(OGRFeature *poNewFeature)
 
     auto ogrGeometry = poNewFeature->GetGeometryRef();
 #ifdef DEBUG
-    char *wkt;
-    ogrGeometry->exportToWkt(&wkt);
-    CPLDebug("FlatGeobuf", "poNewFeature as wkt: %s", wkt);
+    //char *wkt;
+    //ogrGeometry->exportToWkt(&wkt);
+    //CPLDebug("FlatGeobuf", "poNewFeature as wkt: %s", wkt);
 #endif
     auto geometry = writeGeometry(fbb, ogrGeometry);
     auto pValues = values.size() == 0 ? nullptr : &values;
