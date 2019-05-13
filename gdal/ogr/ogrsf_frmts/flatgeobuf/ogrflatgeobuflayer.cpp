@@ -31,10 +31,10 @@ OGRFlatGeobufLayer::OGRFlatGeobufLayer(const Header *poHeader, const char* pszFi
     m_geometryType = m_poHeader->geometry_type();
     m_dimensions = m_poHeader->dimensions();
 
-    auto srs = m_poHeader->srs();
-    if (srs != nullptr) {
+    auto srs_code = m_poHeader->srs_code();
+    if (srs_code != 0) {
         m_poSRS = new OGRSpatialReference();
-        m_poSRS->importFromEPSG(srs->code());
+        m_poSRS->importFromEPSG(srs_code);
     }
 
     auto eGType = OGRFlatGeobufDataset::toOGRwkbGeometryType(m_geometryType);
@@ -169,8 +169,7 @@ OGRFlatGeobufLayer::~OGRFlatGeobufLayer()
 
         FlatBufferBuilder fbb;
         auto columns = writeColumns(fbb);
-        Offset<Index> index = CreateIndex(fbb, 16, m_featuresCount);
-        Offset<Srs> srs = 0;
+        int32_t srs_code = 0;
         // TODO: this can crash for some inputs
         /*if (m_poSRS != nullptr) {
             auto code = m_poSRS->GetEPSGGeogCS();
@@ -181,7 +180,7 @@ OGRFlatGeobufLayer::~OGRFlatGeobufLayer()
         }*/
 
         auto header = CreateHeaderDirect(
-            fbb, m_pszLayerName, &extentVector, m_geometryType, 2, &columns, m_featuresCount, true, index, srs);
+            fbb, m_pszLayerName, &extentVector, m_geometryType, 2, &columns, m_featuresCount, true, 16, srs_code);
         fbb.FinishSizePrefixed(header);
         c = VSIFWriteL(fbb.GetBufferPointer(), 1, fbb.GetSize(), fp);
         CPLDebug("FlatGeobuf", "Wrote header (%zu bytes)", c);
@@ -335,39 +334,46 @@ OGRFeature *OGRFlatGeobufLayer::GetNextFeature()
     auto fid = feature->fid();
     poFeature->SetFID(fid);
     //CPLDebug("FlatGeobuf", "fid: %zu", fid);
-    auto geometry = feature->geometry();
-    auto ogrGeometry = readGeometry(geometry, m_dimensions);
+    auto ogrGeometry = readGeometry(feature, m_dimensions);
 #ifdef DEBUG
-    char *wkt;
-    ogrGeometry->exportToWkt(&wkt);
-    CPLDebug("FlatGeobuf", "readGeometry as wkt: %s", wkt);
+    //char *wkt;
+    //ogrGeometry->exportToWkt(&wkt);
+    //CPLDebug("FlatGeobuf", "readGeometry as wkt: %s", wkt);
 #endif
     // TODO: find out why this is done in other drivers
     //if (poSRS != nullptr)
     //    ogrGeometry->assignSpatialReference(poSRS);
     poFeature->SetGeometry(ogrGeometry);
 
-    auto values = feature->values();
-    if (values != nullptr) {
-        for (size_t i = 0; i < values->size(); i++) {
-            auto value = values->Get(i);
-            auto columnIndex = value->column_index();
-            auto column = m_poHeader->columns()->Get(columnIndex);
+    auto properties = feature->properties();
+    
+    if (properties != nullptr) {
+        auto data = properties->data();
+        auto size = properties->size();
+        //CPLDebug("FlatGeobuf", "properties->size: %d", size);
+        uoffset_t offset = 0;
+        while (offset <= size) {
+            uint16_t i = *((uint16_t *)data);
+            offset += 2;
+            auto column = m_poHeader->columns()->Get(i);
             auto type = column->type();
-            // auto name = column->name();
-            auto ogrField = poFeature->GetRawFieldRef(columnIndex);
+            auto ogrField = poFeature->GetRawFieldRef(i);
             switch (type) {
                 case ColumnType::Int:
-                    ogrField->Integer = value->int_value();
+                    ogrField->Integer = *((int32_t *)(data + offset));
+                    offset += 4;
                     break;
                 case ColumnType::Long:
-                    ogrField->Integer64 = value->long_value();
+                    ogrField->Integer64 = *((int64_t *)(data + offset));
+                    offset += 8;
                     break;
                 case ColumnType::Double:
-                    ogrField->Real = value->double_value();
+                    ogrField->Real = *((double *)(data + offset));
+                    offset += 8;
                     break;
                 case ColumnType::String:
-                    ogrField->String = CPLStrdup(value->string_value()->data());
+                    ogrField->String = CPLStrdup(((const char *)(data + offset)));
+                    offset += strlen(ogrField->String);
                     break;
                 default:
                     CPLDebug("FlatGeobuf", "Unknown column->type: %d", (int) type);
@@ -534,9 +540,9 @@ OGRMultiPolygon *OGRFlatGeobufLayer::readMultiPolygon(
     return mp;
 }
 
-OGRGeometry *OGRFlatGeobufLayer::readGeometry(const Geometry *geometry, uint8_t dimensions)
+OGRGeometry *OGRFlatGeobufLayer::readGeometry(const Feature *feature, uint8_t dimensions)
 {
-    auto pCoords = geometry->coords();
+    auto pCoords = feature->coords();
     if (pCoords == nullptr)
         throw std::runtime_error("Geometry has no coordinates");
     auto coords = pCoords->data();
@@ -549,11 +555,11 @@ OGRGeometry *OGRFlatGeobufLayer::readGeometry(const Geometry *geometry, uint8_t 
         case GeometryType::LineString:
             return readLineString(coords, coordsLength, dimensions);
         case GeometryType::MultiLineString:
-            return readMultiLineString(coords, geometry->lengths(), dimensions);
+            return readMultiLineString(coords, feature->lengths(), dimensions);
         case GeometryType::Polygon:
-            return readPolygon(coords, coordsLength, geometry->ring_lengths(), dimensions);
+            return readPolygon(coords, coordsLength, feature->ring_lengths(), dimensions);
         case GeometryType::MultiPolygon:
-            return readMultiPolygon(coords, coordsLength, geometry->lengths(), geometry->ring_counts(), geometry->ring_lengths(), dimensions);
+            return readMultiPolygon(coords, coordsLength, feature->lengths(), feature->ring_counts(), feature->ring_lengths(), dimensions);
         default:
             throw std::runtime_error("Unknown geometry type");
     }
@@ -580,7 +586,8 @@ OGRErr OGRFlatGeobufLayer::ICreateFeature(OGRFeature *poNewFeature)
     if (fid == OGRNullFID)
         fid = m_featuresCount;
 
-    std::vector<Offset<Value>> values;
+    uint8_t *propertiesBuffer = new uint8_t[10000000];
+    uint32_t propertiesOffset = 0;
     FlatBufferBuilder fbb;
 
     for (int i = 0; i < m_poFeatureDefn->GetFieldCount(); i++) {
@@ -588,51 +595,37 @@ OGRErr OGRFlatGeobufLayer::ICreateFeature(OGRFeature *poNewFeature)
         if (poNewFeature->IsFieldNull(i))
             continue;
 
-        uint16_t column_index = 0;
-        int8_t byte_value = 0;
-        int8_t ubyte_value = 0;
-        bool bool_value = false;
-        int16_t short_value = 0;
-        uint16_t ushort_value = 0;
-        int32_t int_value = 0;
-        uint32_t uint_value = 0;
-        int64_t long_value = 0;
-        uint64_t ulong_value = 0;
-        float float_value = 0.0f;
-        double double_value = 0.0;
-        const char *string_value = nullptr;
-        const char *json_value = nullptr;
-        const char *datetime_value = nullptr;
-
-        column_index = i;
+        uint16_t column_index = i;
+        memcpy(propertiesBuffer, &column_index, 2);
+        propertiesOffset += 2;
 
         auto fieldType = fieldDef->GetType();
+        auto field = poNewFeature->GetRawFieldRef(i);
         switch (fieldType) {
-            case OGRFieldType::OFTInteger:
-                int_value = poNewFeature->GetFieldAsInteger(i);
+            case OGRFieldType::OFTInteger: {
+                memcpy(propertiesBuffer + propertiesOffset, &field->Integer, 4);
+                propertiesOffset += 4;
                 break;
-            case OGRFieldType::OFTInteger64:
-                long_value = poNewFeature->GetFieldAsInteger64(i);
+            }
+            case OGRFieldType::OFTInteger64: {
+                memcpy(propertiesBuffer + propertiesOffset, &field->Integer64, 8);
+                propertiesOffset += 8;
                 break;
-            case OGRFieldType::OFTReal:
-                double_value = poNewFeature->GetFieldAsDouble(i);
+            }
+            case OGRFieldType::OFTReal: {           
+                memcpy(propertiesBuffer + propertiesOffset, &field->Real, 8);
+                propertiesOffset += 8;
                 break;
-            case OGRFieldType::OFTString:
-                string_value = poNewFeature->GetFieldAsString(i);
+            }
+            case OGRFieldType::OFTString: {
+                memcpy(propertiesBuffer + propertiesOffset, field->String, strlen(field->String));
+                propertiesOffset += strlen(field->String);
                 break;
+            }
             default:
                 CPLDebug("FlatGeobuf", "Unknown fieldType: %d", fieldType);
                 throw std::invalid_argument("Unknown fieldType");
         }
-        auto value = CreateValueDirect(fbb, column_index,
-            byte_value, ubyte_value, bool_value,
-            short_value, ushort_value,
-            int_value, uint_value,
-            long_value, ulong_value,
-            float_value, double_value,
-            string_value, json_value, datetime_value
-        );
-        values.push_back(value);
     }
 
     auto ogrGeometry = poNewFeature->GetGeometryRef();
@@ -641,10 +634,43 @@ OGRErr OGRFlatGeobufLayer::ICreateFeature(OGRFeature *poNewFeature)
     //ogrGeometry->exportToWkt(&wkt);
     //CPLDebug("FlatGeobuf", "poNewFeature as wkt: %s", wkt);
 #endif
-    auto geometry = writeGeometry(fbb, ogrGeometry);
-    auto pValues = values.size() == 0 ? nullptr : &values;
-    auto feature = CreateFeatureDirect(fbb, fid, geometry, pValues);
+    if (ogrGeometry == nullptr)
+        return 0;
+    if (ogrGeometry->getGeometryType() != m_eGType)
+        throw std::runtime_error("Mismatched geometry type");
+    std::vector<double> coords;
+    std::vector<uint32_t> lengths;
+    std::vector<uint32_t> ringLengths;
+    std::vector<uint32_t> ringCounts;
+    switch (m_geometryType) {
+        case GeometryType::Point:
+            writePoint(ogrGeometry->toPoint(), coords);
+            break;
+        case GeometryType::MultiPoint:
+            writeMultiPoint(ogrGeometry->toMultiPoint(), coords);
+            break;
+        case GeometryType::LineString:
+            writeLineString(ogrGeometry->toLineString(), coords);
+            break;
+        case GeometryType::MultiLineString:
+            writeMultiLineString(ogrGeometry->toMultiLineString(), coords, lengths);
+            break;
+        case GeometryType::Polygon:
+            writePolygon(ogrGeometry->toPolygon(), coords, ringCounts, ringLengths);
+            break;
+        case GeometryType::MultiPolygon:
+            writeMultiPolygon(ogrGeometry->toMultiPolygon(), coords, lengths, ringCounts, ringLengths);
+            break;
+        default:
+            throw std::runtime_error("Unknown geometry type");
+    }
+    auto pLengths = lengths.size() == 0 ? nullptr : &lengths;
+    auto pRingLengths = ringLengths.size() == 0 ? nullptr : &ringLengths;
+    auto pRingCounts = ringCounts.size() == 0 ? nullptr : &ringCounts;
+    std::vector<int8_t> properties ( propertiesBuffer, propertiesBuffer + propertiesOffset );
+    auto feature = CreateFeatureDirect(fbb, fid, pRingCounts, pRingLengths, pLengths, &coords, &properties);
     fbb.FinishSizePrefixed(feature);
+    delete propertiesBuffer;
 
     OGREnvelope psEnvelope;
     ogrGeometry->getEnvelope(&psEnvelope);
@@ -726,45 +752,6 @@ void OGRFlatGeobufLayer::writeMultiPolygon(
 {
     for (int i = 0; i < mp->getNumGeometries(); i++)
         lengths.push_back(writePolygon(mp->getGeometryRef(i)->toPolygon(), coords, ringCounts, ringLengths));
-}
-
-Offset<Geometry> OGRFlatGeobufLayer::writeGeometry(FlatBufferBuilder &fbb, OGRGeometry *ogrGeometry)
-{
-    if (ogrGeometry == nullptr)
-        return 0;
-    if (ogrGeometry->getGeometryType() != m_eGType)
-        throw std::runtime_error("Mismatched geometry type");
-    std::vector<double> coords;
-    std::vector<uint32_t> lengths;
-    std::vector<uint32_t> ringLengths;
-    std::vector<uint32_t> ringCounts;
-    switch (m_geometryType) {
-        case GeometryType::Point:
-            writePoint(ogrGeometry->toPoint(), coords);
-            break;
-        case GeometryType::MultiPoint:
-            writeMultiPoint(ogrGeometry->toMultiPoint(), coords);
-            break;
-        case GeometryType::LineString:
-            writeLineString(ogrGeometry->toLineString(), coords);
-            break;
-        case GeometryType::MultiLineString:
-            writeMultiLineString(ogrGeometry->toMultiLineString(), coords, lengths);
-            break;
-        case GeometryType::Polygon:
-            writePolygon(ogrGeometry->toPolygon(), coords, ringCounts, ringLengths);
-            break;
-        case GeometryType::MultiPolygon:
-            writeMultiPolygon(ogrGeometry->toMultiPolygon(), coords, lengths, ringCounts, ringLengths);
-            break;
-        default:
-            throw std::runtime_error("Unknown geometry type");
-    }
-    auto pLengths = lengths.size() == 0 ? nullptr : &lengths;
-    auto pRingLengths = ringLengths.size() == 0 ? nullptr : &ringLengths;
-    auto pRingCounts = ringCounts.size() == 0 ? nullptr : &ringCounts;
-    auto geometry = CreateGeometryDirect(fbb, pRingCounts, pRingLengths, pLengths, &coords);
-    return geometry;
 }
 
 int OGRFlatGeobufLayer::TestCapability(const char *pszCap)
