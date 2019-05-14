@@ -422,12 +422,16 @@ OGRFeature *OGRFlatGeobufLayer::GetNextFeature()
                     ogrField->Real = *((double *)(data + offset));
                     offset += sizeof(double);
                     break;
-                case ColumnType::String:
-                    ogrField->String = CPLStrdup(((const char *)(data + offset)));
-                    //ogrField->String = (char *)(data + offset);
-                    //CPLDebug("FlatGeobuf", "ogrField->String: %s", ogrField->String);
-                    offset += strlen(ogrField->String) + 1;
+                case ColumnType::String: {
+                    uint32_t len = *((uint32_t *)(data + offset));
+                    offset += sizeof(uint32_t);
+                    uint8_t *str = new uint8_t[len + 1];
+                    memcpy(str, data + offset, len);
+                    offset += len;
+                    str[len] = '\0';
+                    ogrField->String = (char *) str;
                     break;
+                }
                 default:
                     CPLError(CE_Fatal, CPLE_AppDefined, "GetNextFeature: Unknown column->type: %d", (int) type);
             }
@@ -671,8 +675,11 @@ OGRErr OGRFlatGeobufLayer::ICreateFeature(OGRFeature *poNewFeature)
                 break;
             }
             case OGRFieldType::OFTString: {
-                memcpy(propertiesBuffer + propertiesOffset, field->String, strlen(field->String) + 1);
-                propertiesOffset += strlen(field->String) + 1;
+                uint32_t len = strlen(field->String);
+                memcpy(propertiesBuffer + propertiesOffset, &len, sizeof(uint32_t));
+                propertiesOffset += sizeof(len);
+                memcpy(propertiesBuffer + propertiesOffset, field->String, len);
+                propertiesOffset += len;
                 break;
             }
             default:
@@ -724,7 +731,7 @@ OGRErr OGRFlatGeobufLayer::ICreateFeature(OGRFeature *poNewFeature)
     auto pLengths = lengths.size() == 0 ? nullptr : &lengths;
     auto pRingLengths = ringLengths.size() == 0 ? nullptr : &ringLengths;
     auto pRingCounts = ringCounts.size() == 0 ? nullptr : &ringCounts;
-    std::vector<int8_t> properties ( propertiesBuffer, propertiesBuffer + propertiesOffset );
+    std::vector<uint8_t> properties ( propertiesBuffer, propertiesBuffer + propertiesOffset );
     auto feature = CreateFeatureDirect(fbb, fid, pRingCounts, pRingLengths, pLengths, &coords, &properties);
     fbb.FinishSizePrefixed(feature);
     delete propertiesBuffer;
