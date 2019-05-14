@@ -402,9 +402,10 @@ OGRFeature *OGRFlatGeobufLayer::GetNextFeature()
         auto size = properties->size();
         //CPLDebug("FlatGeobuf", "properties->size: %d", size);
         uoffset_t offset = 0;
-        while (size > offset) {
-            uint16_t i = *((uint16_t *)data);
-            offset += 2;
+        while (offset < (size-1)) {
+            uint16_t i = *((uint16_t *)(data + offset));
+            offset += sizeof(uint16_t);
+            //CPLDebug("FlatGeobuf", "i: %d", i);
             auto column = m_poHeader->columns()->Get(i);
             auto type = column->type();
             auto ogrField = poFeature->GetRawFieldRef(i);
@@ -648,7 +649,7 @@ OGRErr OGRFlatGeobufLayer::ICreateFeature(OGRFeature *poNewFeature)
             continue;
 
         uint16_t column_index = i;
-        memcpy(propertiesBuffer, &column_index, sizeof(uint16_t));
+        memcpy(propertiesBuffer + propertiesOffset, &column_index, sizeof(uint16_t));
         propertiesOffset += sizeof(uint16_t);
 
         auto fieldType = fieldDef->GetType();
