@@ -4,12 +4,15 @@
 #include "ogrsf_frmts.h"
 #include "ogr_p.h"
 
-#include "flatgeobuf_generated.h"
+#include "header_generated.h"
+#include "feature_generated.h"
 #include "packedrtree.h"
 
 using namespace FlatGeobuf;
 
 class OGRFlatGeobufDataset;
+
+static constexpr const uint8_t magicbytes[8] = { 0x66, 0x67, 0x62, 0x00, 0x66, 0x67, 0x62, 0x00 };
 
 struct FeatureItem : Item {
     flatbuffers::DetachedBuffer buf;
@@ -64,7 +67,7 @@ class OGRFlatGeobufLayer : public OGRLayer
         OGRLinearRing *readLinearRing(const double *coords, uint32_t coordsLength, uint8_t dimensions, uint32_t offset = 0);
         OGRPolygon *readPolygon(const double *coords, uint32_t coordsLength, const flatbuffers::Vector<uint32_t> *ringLengths, uint8_t dimensions, uint32_t offset = 0);
         OGRMultiPolygon *readMultiPolygon(const double *coords, uint32_t coordsLength, const flatbuffers::Vector<uint32_t> *lengths, const flatbuffers::Vector<uint32_t> *ringCounts, const flatbuffers::Vector<uint32_t> *ringLengths, uint8_t dimensions);
-        OGRGeometry *readGeometry(const Geometry* geometry, uint8_t dimensions);
+        OGRGeometry *readGeometry(const Feature* feature, uint8_t dimensions);
         ColumnType toColumnType(OGRFieldType fieldType, OGRFieldSubType subType);
         OGRFieldType toOGRFieldType(ColumnType type);
         const std::vector<flatbuffers::Offset<Column>> writeColumns(flatbuffers::FlatBufferBuilder &fbb);
@@ -78,7 +81,9 @@ class OGRFlatGeobufLayer : public OGRLayer
         void writeMultiLineString(OGRMultiLineString *mls, std::vector<double> &coords, std::vector<uint32_t> &lengths);
         uint32_t writePolygon(OGRPolygon *p, std::vector<double> &coords, std::vector<uint32_t> &ringCounts, std::vector<uint32_t> &ringLengths);
         void writeMultiPolygon(OGRMultiPolygon *mp, std::vector<double> &coords, std::vector<uint32_t> &lengths, std::vector<uint32_t> &ringCounts, std::vector<uint32_t> &ringLengths);
-        flatbuffers::Offset<Geometry> writeGeometry(flatbuffers::FlatBufferBuilder& fbb, OGRGeometry* ogrGeometry);
+
+        void translateOGRwkbGeometryType();
+        OGRwkbGeometryType getOGRwkbGeometryType();
     public:
         OGRFlatGeobufLayer(const Header*, const char* pszFilename, uint64_t offset);
         OGRFlatGeobufLayer(const char *pszLayerName, const char *pszFilename, OGRSpatialReference *poSpatialRef, OGRwkbGeometryType eGType);
@@ -122,9 +127,6 @@ class OGRFlatGeobufDataset final: public GDALDataset
                                      char ** papszOptions = nullptr ) override;
 
         virtual int GetLayerCount() override { return static_cast<int>(m_apoLayers.size()); }
-
-        static GeometryType toGeometryType(OGRwkbGeometryType eGType);
-        static OGRwkbGeometryType toOGRwkbGeometryType(GeometryType geometryType);
 };
 
 #endif /* ndef OGR_FLATGEOBUF_H_INCLUDED */

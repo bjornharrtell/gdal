@@ -1,5 +1,6 @@
 #!/bin/sh
 ./configure --prefix=/home/bjorn/temp/gdal --with-geos \
+    --enable-debug \
     --without-bsb \
     --without-cfitsio \
     --without-cryptopp \
