@@ -12,6 +12,8 @@ using namespace FlatGeobuf;
 
 class OGRFlatGeobufDataset;
 
+static constexpr const uint8_t magicbytes[8] = { 0x66, 0x67, 0x62, 0x00, 0x66, 0x67, 0x62, 0x00 };
+
 struct FeatureItem : Item {
     flatbuffers::DetachedBuffer buf;
     uint8_t *data;
@@ -79,6 +81,9 @@ class OGRFlatGeobufLayer : public OGRLayer
         void writeMultiLineString(OGRMultiLineString *mls, std::vector<double> &coords, std::vector<uint32_t> &lengths);
         uint32_t writePolygon(OGRPolygon *p, std::vector<double> &coords, std::vector<uint32_t> &ringCounts, std::vector<uint32_t> &ringLengths);
         void writeMultiPolygon(OGRMultiPolygon *mp, std::vector<double> &coords, std::vector<uint32_t> &lengths, std::vector<uint32_t> &ringCounts, std::vector<uint32_t> &ringLengths);
+
+        void translateOGRwkbGeometryType();
+        OGRwkbGeometryType getOGRwkbGeometryType();
     public:
         OGRFlatGeobufLayer(const Header*, const char* pszFilename, uint64_t offset);
         OGRFlatGeobufLayer(const char *pszLayerName, const char *pszFilename, OGRSpatialReference *poSpatialRef, OGRwkbGeometryType eGType);
@@ -122,9 +127,6 @@ class OGRFlatGeobufDataset final: public GDALDataset
                                      char ** papszOptions = nullptr ) override;
 
         virtual int GetLayerCount() override { return static_cast<int>(m_apoLayers.size()); }
-
-        static GeometryType toGeometryType(OGRwkbGeometryType eGType);
-        static OGRwkbGeometryType toOGRwkbGeometryType(GeometryType geometryType);
 };
 
 #endif /* ndef OGR_FLATGEOBUF_H_INCLUDED */

@@ -1,6 +1,6 @@
 #include "ogr_flatgeobuf.h"
 
-#include "flatgeobuf_generated.h"
+#include "header_generated.h"
 
 static int OGRFlatGeobufDriverIdentify(GDALOpenInfo* poOpenInfo){
     if( STARTS_WITH_CI(poOpenInfo->pszFilename, "FGB:") )
@@ -110,8 +110,8 @@ GDALDataset *OGRFlatGeobufDataset::Open(GDALOpenInfo* poOpenInfo)
     VSILFILE *fp = poOpenInfo->fpL;
     CPLString osFilename(poOpenInfo->pszFilename);
 
-    uint64_t offset = 4;
-    CPLDebug("FlatGeobuf", "Start at offset (%d)", 4);
+    uint64_t offset = sizeof(magicbytes);
+    CPLDebug("FlatGeobuf", "Start at offset (%d)", sizeof(magicbytes));
     VSIFSeekL(fp, offset, SEEK_SET);
     uint32_t headerSize;
     VSIFReadL(&headerSize, 4, 1, fp);
@@ -230,34 +230,6 @@ int OGRFlatGeobufDataset::TestCapability( const char * pszCap )
         return false;
 }
 
-GeometryType OGRFlatGeobufDataset::toGeometryType(OGRwkbGeometryType eGType)
-{
-    switch (eGType) {
-        case OGRwkbGeometryType::wkbPoint: return GeometryType::Point;
-        case OGRwkbGeometryType::wkbMultiPoint: return GeometryType::MultiPoint;
-        case OGRwkbGeometryType::wkbLineString: return GeometryType::LineString;
-        case OGRwkbGeometryType::wkbMultiLineString: return GeometryType::MultiLineString;
-        case OGRwkbGeometryType::wkbPolygon: return GeometryType::Polygon;
-        case OGRwkbGeometryType::wkbMultiPolygon: return GeometryType::MultiPolygon;
-        default:
-            throw std::runtime_error("Unknown geometry type");
-    }
-}
-
-OGRwkbGeometryType OGRFlatGeobufDataset::toOGRwkbGeometryType(GeometryType geometryType)
-{
-    switch (geometryType) {
-        case GeometryType::Point: return OGRwkbGeometryType::wkbPoint;
-        case GeometryType::MultiPoint: return OGRwkbGeometryType::wkbMultiPoint;
-        case GeometryType::LineString: return OGRwkbGeometryType::wkbLineString;
-        case GeometryType::MultiLineString: return OGRwkbGeometryType::wkbMultiLineString;
-        case GeometryType::Polygon: return OGRwkbGeometryType::wkbPolygon;
-        case GeometryType::MultiPolygon: return OGRwkbGeometryType::wkbMultiPolygon;
-        default:
-            throw std::runtime_error("Unknown geometry type");
-    }
-}
-
 OGRLayer* OGRFlatGeobufDataset::ICreateLayer( const char *pszLayerName,
                                 OGRSpatialReference *poSpatialRef,
                                 OGRwkbGeometryType eGType,
@@ -302,7 +274,7 @@ OGRLayer* OGRFlatGeobufDataset::ICreateLayer( const char *pszLayerName,
     // Does this directory/file already exist?
     if( VSIStatL(osFilename, &sStatBuf) == 0 )
     {
-        CPLError(CE_Failure, CPLE_AppDefined,
+        CPLError(CE_Fatal, CPLE_FileIO,
                  "Attempt to create layer %s, but %s already exists.",
                  pszLayerName, osFilename.c_str());
         return nullptr;

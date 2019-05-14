@@ -15,10 +15,10 @@ OGRFlatGeobufLayer::OGRFlatGeobufLayer(const Header *poHeader, const char* pszFi
     CPLDebug("FlatGeobuf", "offset: %zu", offset);
 
     if (poHeader == nullptr)
-        CPLError(CE_Failure, CPLE_OpenFailed, "poHeader is null.\n");
+        CPLError(CE_Fatal, CPLE_OpenFailed, "poHeader is null.\n");
 
     if (pszFilename == nullptr)
-        CPLError(CE_Failure, CPLE_OpenFailed, "pszFilename is null.\n");
+        CPLError(CE_Fatal, CPLE_OpenFailed, "pszFilename is null.\n");
 
     m_poHeader = poHeader;
     // TODO: free
@@ -37,7 +37,7 @@ OGRFlatGeobufLayer::OGRFlatGeobufLayer(const Header *poHeader, const char* pszFi
         m_poSRS->importFromEPSG(srs_code);
     }
 
-    auto eGType = OGRFlatGeobufDataset::toOGRwkbGeometryType(m_geometryType);
+    auto eGType = getOGRwkbGeometryType();
 
     CPLDebug("FlatGeobuf", "m_featuresCount: %zu", m_featuresCount);
 
@@ -73,7 +73,7 @@ OGRFlatGeobufLayer::OGRFlatGeobufLayer(
     m_pszFilename = CPLStrdup(pszFilename);
     m_create = true;
     m_eGType = eGType;
-    m_geometryType = OGRFlatGeobufDataset::toGeometryType(eGType);
+    translateOGRwkbGeometryType();
     m_poSRS = poSpatialRef;
 
     CPLDebug("FlatGeobuf", "eGType: %d", (int) eGType);
@@ -85,6 +85,52 @@ OGRFlatGeobufLayer::OGRFlatGeobufLayer(
     SetDescription(m_poFeatureDefn->GetName());
     m_poFeatureDefn->SetGeomType(eGType);
     m_poFeatureDefn->Reference();
+}
+
+void OGRFlatGeobufLayer::translateOGRwkbGeometryType()
+{
+    switch (m_eGType) {
+        case OGRwkbGeometryType::wkbPoint: m_geometryType = GeometryType::Point; m_dimensions = 2; break;
+        case OGRwkbGeometryType::wkbPoint25D: m_geometryType = GeometryType::Point; m_dimensions = 3; break;
+        case OGRwkbGeometryType::wkbPointM: m_geometryType = GeometryType::Point; m_dimensions = 3; break;
+        case OGRwkbGeometryType::wkbPointZM: m_geometryType = GeometryType::Point; m_dimensions = 4; break;
+        case OGRwkbGeometryType::wkbMultiPoint: m_geometryType = GeometryType::MultiPoint; m_dimensions = 2; break;
+        case OGRwkbGeometryType::wkbMultiPoint25D: m_geometryType = GeometryType::MultiPoint; m_dimensions = 3; break;
+        case OGRwkbGeometryType::wkbMultiPointM: m_geometryType = GeometryType::MultiPoint; m_dimensions = 3; break;
+        case OGRwkbGeometryType::wkbMultiPointZM: m_geometryType = GeometryType::MultiPoint; m_dimensions = 4; break;
+        case OGRwkbGeometryType::wkbLineString: m_geometryType = GeometryType::LineString; m_dimensions = 2; break;
+        case OGRwkbGeometryType::wkbLineString25D: m_geometryType = GeometryType::LineString; m_dimensions = 3; break;
+        case OGRwkbGeometryType::wkbLineStringM: m_geometryType = GeometryType::LineString; m_dimensions = 3; break;
+        case OGRwkbGeometryType::wkbLineStringZM: m_geometryType = GeometryType::LineString; m_dimensions = 4; break;
+        case OGRwkbGeometryType::wkbMultiLineString: m_geometryType = GeometryType::MultiLineString; m_dimensions = 2; break;
+        case OGRwkbGeometryType::wkbMultiLineString25D: m_geometryType = GeometryType::MultiLineString; m_dimensions = 3; break;
+        case OGRwkbGeometryType::wkbMultiLineStringM: m_geometryType = GeometryType::MultiLineString; m_dimensions = 3; break;
+        case OGRwkbGeometryType::wkbMultiLineStringZM: m_geometryType = GeometryType::MultiLineString; m_dimensions = 4; break;
+        case OGRwkbGeometryType::wkbPolygon: m_geometryType = GeometryType::Polygon; m_dimensions = 2; break;
+        case OGRwkbGeometryType::wkbPolygon25D: m_geometryType = GeometryType::Polygon; m_dimensions = 3; break;
+        case OGRwkbGeometryType::wkbPolygonM: m_geometryType = GeometryType::Polygon; m_dimensions = 3; break;
+        case OGRwkbGeometryType::wkbPolygonZM: m_geometryType = GeometryType::Polygon; m_dimensions = 4; break;
+        case OGRwkbGeometryType::wkbMultiPolygon: m_geometryType = GeometryType::MultiPolygon; m_dimensions = 2; break;
+        case OGRwkbGeometryType::wkbMultiPolygon25D: m_geometryType = GeometryType::MultiPolygon; m_dimensions = 3; break;
+        case OGRwkbGeometryType::wkbMultiPolygonM: m_geometryType = GeometryType::MultiPolygon; m_dimensions = 3; break;
+        case OGRwkbGeometryType::wkbMultiPolygonZM: m_geometryType = GeometryType::MultiPolygon; m_dimensions = 4; break;
+        default:
+            CPLError(CE_Fatal, CPLE_NotSupported, "toGeometryType: Unknown OGRwkbGeometryType %d", m_eGType);
+    }
+}
+
+OGRwkbGeometryType OGRFlatGeobufLayer::getOGRwkbGeometryType()
+{
+    switch (m_geometryType) {
+        case GeometryType::Point: return m_dimensions == 2 ? OGRwkbGeometryType::wkbPoint : OGRwkbGeometryType::wkbPoint25D;
+        case GeometryType::MultiPoint: return m_dimensions == 2 ? OGRwkbGeometryType::wkbMultiPoint : OGRwkbGeometryType::wkbMultiPoint25D;
+        case GeometryType::LineString: return m_dimensions == 2 ? OGRwkbGeometryType::wkbLineString : OGRwkbGeometryType::wkbLineString25D;
+        case GeometryType::MultiLineString: return m_dimensions == 2 ? OGRwkbGeometryType::wkbMultiLineString : OGRwkbGeometryType::wkbMultiLineString25D;
+        case GeometryType::Polygon: return m_dimensions == 2 ? OGRwkbGeometryType::wkbPolygon : OGRwkbGeometryType::wkbPolygon25D;
+        case GeometryType::MultiPolygon: return m_dimensions == 2 ? OGRwkbGeometryType::wkbMultiPolygon : OGRwkbGeometryType::wkbMultiPolygon25D;
+        default:
+            CPLError(CE_Fatal, CPLE_NotSupported, "toOGRwkbGeometryType: Unknown FlatGeobuf::GeometryType %d", m_geometryType);
+    }
 }
 
 ColumnType OGRFlatGeobufLayer::toColumnType(OGRFieldType type, OGRFieldSubType subType)
@@ -147,15 +193,14 @@ OGRFlatGeobufLayer::~OGRFlatGeobufLayer()
         VSILFILE *fp = VSIFOpenL(m_pszFilename, "wb");
 
         if(fp == nullptr) {
-            CPLError(CE_Failure, CPLE_OpenFailed,
+            CPLError(CE_Fatal, CPLE_OpenFailed,
                         "Failed to create %s:\n%s",
                         m_pszFilename, VSIStrerror(errno));
             return;
         }
 
-        uint8_t magicbytes[4] = { 0x66, 0x67, 0x62, 0x00 };
-        c = VSIFWriteL(&magicbytes, 4, 1, fp);
-        CPLDebug("FlatGeobuf", "Wrote magicbytes (%zu bytes)", c * 4);
+        c = VSIFWriteL(&magicbytes, sizeof(magicbytes), 1, fp);
+        CPLDebug("FlatGeobuf", "Wrote magicbytes (%zu bytes)", c * sizeof(magicbytes));
 
         Rect extent = calcExtent(m_featureItems);
 
@@ -180,7 +225,7 @@ OGRFlatGeobufLayer::~OGRFlatGeobufLayer()
         }*/
 
         auto header = CreateHeaderDirect(
-            fbb, m_pszLayerName, &extentVector, m_geometryType, 2, &columns, m_featuresCount, true, 16, srs_code);
+            fbb, m_pszLayerName, &extentVector, m_geometryType, m_dimensions, &columns, m_featuresCount, true, 16, srs_code);
         fbb.FinishSizePrefixed(header);
         c = VSIFWriteL(fbb.GetBufferPointer(), 1, fbb.GetSize(), fp);
         CPLDebug("FlatGeobuf", "Wrote header (%zu bytes)", c);
@@ -238,7 +283,7 @@ void OGRFlatGeobufLayer::processSpatialIndex() {
             m_poFp = VSIFOpenL(m_pszFilename, "rb");
             //m_poFp = (VSILFILE*) VSICreateCachedFile ( (VSIVirtualHandle*) m_poFp);
         }
-        VSIFSeekL(m_poFp, 4, SEEK_SET); // skip magic bytes
+        VSIFSeekL(m_poFp, sizeof(magicbytes), SEEK_SET); // skip magic bytes
         uint32_t headerSize;
         VSIFReadL(&headerSize, 4, 1, m_poFp);
         auto featuresCount = m_poHeader->features_count();
@@ -346,7 +391,7 @@ OGRFeature *OGRFlatGeobufLayer::GetNextFeature()
     poFeature->SetGeometry(ogrGeometry);
 
     auto properties = feature->properties();
-    
+
     if (properties != nullptr) {
         auto data = properties->data();
         auto size = properties->size();
@@ -561,7 +606,7 @@ OGRGeometry *OGRFlatGeobufLayer::readGeometry(const Feature *feature, uint8_t di
         case GeometryType::MultiPolygon:
             return readMultiPolygon(coords, coordsLength, feature->lengths(), feature->ring_counts(), feature->ring_lengths(), dimensions);
         default:
-            throw std::runtime_error("Unknown geometry type");
+            CPLError(CE_Fatal, CPLE_AppDefined, "readGeometry: Unknown FlatGeobuf::GeometryType %d", m_geometryType);
     }
 }
 
@@ -570,7 +615,7 @@ OGRErr OGRFlatGeobufLayer::CreateField(OGRFieldDefn *poField, int bApproxOK)
     CPLDebug("FlatGeobuf", "CreateField %s %s", poField->GetNameRef(), poField->GetFieldTypeName(poField->GetType()));
     if(!TestCapability(OLCCreateField))
     {
-        CPLError(CE_Failure, CPLE_AppDefined,
+        CPLError(CE_Fatal, CPLE_AppDefined,
                  "Unable to create new fields after first feature written.");
         return OGRERR_FAILURE;
     }
@@ -612,7 +657,7 @@ OGRErr OGRFlatGeobufLayer::ICreateFeature(OGRFeature *poNewFeature)
                 propertiesOffset += 8;
                 break;
             }
-            case OGRFieldType::OFTReal: {           
+            case OGRFieldType::OFTReal: {
                 memcpy(propertiesBuffer + propertiesOffset, &field->Real, 8);
                 propertiesOffset += 8;
                 break;
@@ -623,8 +668,7 @@ OGRErr OGRFlatGeobufLayer::ICreateFeature(OGRFeature *poNewFeature)
                 break;
             }
             default:
-                CPLDebug("FlatGeobuf", "Unknown fieldType: %d", fieldType);
-                throw std::invalid_argument("Unknown fieldType");
+                CPLError(CE_Fatal, CPLE_AppDefined, "ICreateFeature: Missing implementatin for OGRFieldType %d", fieldType);
         }
     }
 
@@ -662,7 +706,7 @@ OGRErr OGRFlatGeobufLayer::ICreateFeature(OGRFeature *poNewFeature)
             writeMultiPolygon(ogrGeometry->toMultiPolygon(), coords, lengths, ringCounts, ringLengths);
             break;
         default:
-            throw std::runtime_error("Unknown geometry type");
+            CPLError(CE_Fatal, CPLE_AppDefined, "ICreateFeature: Unknown FlatGeobuf::GeometryType %d", m_geometryType);
     }
     auto pLengths = lengths.size() == 0 ? nullptr : &lengths;
     auto pRingLengths = ringLengths.size() == 0 ? nullptr : &ringLengths;
