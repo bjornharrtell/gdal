@@ -135,7 +135,7 @@ OGRwkbGeometryType OGRFlatGeobufLayer::getOGRwkbGeometryType()
     return OGRwkbGeometryType::wkbUnknown;
 }
 
-ColumnType OGRFlatGeobufLayer::toColumnType(OGRFieldType type, OGRFieldSubType subType)
+ColumnType OGRFlatGeobufLayer::toColumnType(OGRFieldType type, OGRFieldSubType /* subType */)
 {
     switch (type) {
         case OGRFieldType::OFTInteger: return ColumnType::Int;
@@ -273,7 +273,7 @@ OGRFlatGeobufLayer::~OGRFlatGeobufLayer()
     m_processedSpatialIndex = false;
 }
 
-OGRFeature *OGRFlatGeobufLayer::GetFeature(GIntBig nFeatureId)
+OGRFeature *OGRFlatGeobufLayer::GetFeature(GIntBig /* nFeatureId */)
 {
     CPLError(CE_Fatal, CPLE_AppDefined, "GetFeature: Not implemented");
     return nullptr;
@@ -316,7 +316,7 @@ void OGRFlatGeobufLayer::processSpatialIndex() {
     }
 }
 
-GIntBig OGRFlatGeobufLayer::GetFeatureCount(int bForce) {
+GIntBig OGRFlatGeobufLayer::GetFeatureCount(int /* bForce */) {
     processSpatialIndex();
     return m_featuresCount;
 }
@@ -619,7 +619,7 @@ OGRGeometry *OGRFlatGeobufLayer::readGeometry(const Feature *feature, uint8_t di
     return nullptr;
 }
 
-OGRErr OGRFlatGeobufLayer::CreateField(OGRFieldDefn *poField, int bApproxOK)
+OGRErr OGRFlatGeobufLayer::CreateField(OGRFieldDefn *poField, int /* bApproxOK */)
 {
     CPLDebug("FlatGeobuf", "CreateField %s %s", poField->GetNameRef(), poField->GetFieldTypeName(poField->GetType()));
     if(!TestCapability(OLCCreateField))

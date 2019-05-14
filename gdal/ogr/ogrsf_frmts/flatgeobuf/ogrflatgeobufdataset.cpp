@@ -111,7 +111,7 @@ GDALDataset *OGRFlatGeobufDataset::Open(GDALOpenInfo* poOpenInfo)
     CPLString osFilename(poOpenInfo->pszFilename);
 
     uint64_t offset = sizeof(magicbytes);
-    CPLDebug("FlatGeobuf", "Start at offset (%d)", sizeof(magicbytes));
+    CPLDebug("FlatGeobuf", "Start at offset (%lu)", sizeof(magicbytes));
     VSIFSeekL(fp, offset, SEEK_SET);
     uint32_t headerSize;
     VSIFReadL(&headerSize, 4, 1, fp);
@@ -141,7 +141,7 @@ GDALDataset *OGRFlatGeobufDataset::Create( const char *pszName,
                                         CPL_UNUSED int nXSize,
                                         CPL_UNUSED int nYSize,
                                         CPL_UNUSED GDALDataType eDT,
-                                        char **papszOptions )
+                                        char ** /*papszOptions*/ )
 {
     // First, ensure there isn't any such file yet.
     VSIStatBufL sStatBuf;
@@ -233,7 +233,7 @@ int OGRFlatGeobufDataset::TestCapability( const char * pszCap )
 OGRLayer* OGRFlatGeobufDataset::ICreateLayer( const char *pszLayerName,
                                 OGRSpatialReference *poSpatialRef,
                                 OGRwkbGeometryType eGType,
-                                char **papszOptions )
+                                char ** /*papszOptions*/ )
 {
     // Verify we are in update mode.
     if( !m_create )
