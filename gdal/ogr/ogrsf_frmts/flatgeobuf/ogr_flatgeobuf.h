@@ -63,10 +63,10 @@ class OGRFlatGeobufLayer : public OGRLayer
         OGRPoint *readPoint(const double *coords, uint8_t dimensions, uint32_t offset = 0);
         OGRMultiPoint *readMultiPoint(const double *coords, uint32_t coordsLength, uint8_t dimensions);
         OGRLineString *readLineString(const double *coords, uint32_t coordsLength, uint8_t dimensions, uint32_t offset = 0);
-        OGRMultiLineString *readMultiLineString(const double *coords, const flatbuffers::Vector<uint32_t> *lengths, uint8_t dimensions);
+        OGRMultiLineString *readMultiLineString(const double *coords, const flatbuffers::Vector<uint32_t> *ends, uint8_t dimensions);
         OGRLinearRing *readLinearRing(const double *coords, uint32_t coordsLength, uint8_t dimensions, uint32_t offset = 0);
-        OGRPolygon *readPolygon(const double *coords, uint32_t coordsLength, const flatbuffers::Vector<uint32_t> *ringLengths, uint8_t dimensions, uint32_t offset = 0);
-        OGRMultiPolygon *readMultiPolygon(const double *coords, uint32_t coordsLength, const flatbuffers::Vector<uint32_t> *lengths, const flatbuffers::Vector<uint32_t> *ringCounts, const flatbuffers::Vector<uint32_t> *ringLengths, uint8_t dimensions);
+        OGRPolygon *readPolygon(const double *coords, uint32_t coordsLength, const flatbuffers::Vector<uint32_t> *ends, uint8_t dimensions, uint32_t offset = 0);
+        OGRMultiPolygon *readMultiPolygon(const double *coords, uint32_t coordsLength, const flatbuffers::Vector<uint32_t> *ends, const flatbuffers::Vector<uint32_t> *endss, uint8_t dimensions);
         OGRGeometry *readGeometry(const Feature* feature, uint8_t dimensions);
         ColumnType toColumnType(OGRFieldType fieldType, OGRFieldSubType subType);
         OGRFieldType toOGRFieldType(ColumnType type);
@@ -78,9 +78,9 @@ class OGRFlatGeobufLayer : public OGRLayer
         void writePoint(OGRPoint *p, std::vector<double> &coords);
         void writeMultiPoint(OGRMultiPoint *mp, std::vector<double> &coords);
         uint32_t writeLineString(OGRLineString *ls, std::vector<double> &coords);
-        void writeMultiLineString(OGRMultiLineString *mls, std::vector<double> &coords, std::vector<uint32_t> &lengths);
-        uint32_t writePolygon(OGRPolygon *p, std::vector<double> &coords, std::vector<uint32_t> &ringCounts, std::vector<uint32_t> &ringLengths);
-        void writeMultiPolygon(OGRMultiPolygon *mp, std::vector<double> &coords, std::vector<uint32_t> &lengths, std::vector<uint32_t> &ringCounts, std::vector<uint32_t> &ringLengths);
+        void writeMultiLineString(OGRMultiLineString *mls, std::vector<double> &coords, std::vector<uint32_t> &ends);
+        uint32_t writePolygon(OGRPolygon *p, std::vector<double> &coords, std::vector<uint32_t> &ends, bool isMulti, uint32_t end);
+        void writeMultiPolygon(OGRMultiPolygon *mp, std::vector<double> &coords, std::vector<uint32_t> &ends, std::vector<uint32_t> &endss);
 
         void translateOGRwkbGeometryType();
         OGRwkbGeometryType getOGRwkbGeometryType();

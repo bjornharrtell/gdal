@@ -513,15 +513,15 @@ OGRLineString *OGRFlatGeobufLayer::readLineString(const double *coords, uint32_t
     return ls;
 }
 
-OGRMultiLineString *OGRFlatGeobufLayer::readMultiLineString(const double *coords, const flatbuffers::Vector<uint32_t> *lengths, uint8_t dimensions)
+OGRMultiLineString *OGRFlatGeobufLayer::readMultiLineString(const double *coords, const flatbuffers::Vector<uint32_t> *ends, uint8_t dimensions)
 {
     auto mls = new OGRMultiLineString();
     uint32_t offset = 0;
-    for (size_t i = 0; i < lengths->size(); i++) {
-        auto length = lengths->Get(i);
-        auto ls = readLineString(coords, length, dimensions, offset);
+    for (size_t i = 0; i < ends->size(); i++) {
+        auto end = ends->Get(i);
+        auto ls = readLineString(coords, end, dimensions, offset);
         mls->addGeometryDirectly(ls);
-        offset += length;
+        offset = end;
     }
     return mls;
 }
@@ -553,16 +553,16 @@ OGRLinearRing *OGRFlatGeobufLayer::readLinearRing(const double *coords, uint32_t
     return ls;
 }
 
-OGRPolygon *OGRFlatGeobufLayer::readPolygon(const double *coords, uint32_t coordsLength, const Vector<uint32_t> *ringLengths, uint8_t dimensions, uint32_t offset)
+OGRPolygon *OGRFlatGeobufLayer::readPolygon(const double *coords, uint32_t coordsLength, const Vector<uint32_t> *ends, uint8_t dimensions, uint32_t offset)
 {
     auto p = new OGRPolygon();
-    if (ringLengths == nullptr || ringLengths->size() < 2) {
+    if (ends == nullptr || ends->size() < 2) {
         p->addRingDirectly(readLinearRing(coords, coordsLength, dimensions));
     } else {
-        for (size_t i = 0; i < ringLengths->size(); i++) {
-            auto ringLength = ringLengths->Get(i);
-            p->addRingDirectly(readLinearRing(coords, ringLength, dimensions, offset));
-            offset += ringLength;
+        for (size_t i = 0; i < ends->size(); i++) {
+            auto end = ends->Get(i);
+            p->addRingDirectly(readLinearRing(coords, end - offset, dimensions, offset));
+            offset = end;
         }
     }
     return p;
@@ -571,25 +571,23 @@ OGRPolygon *OGRFlatGeobufLayer::readPolygon(const double *coords, uint32_t coord
 OGRMultiPolygon *OGRFlatGeobufLayer::readMultiPolygon(
     const double *coords,
     uint32_t coordsLength,
-    const Vector<uint32_t> *lengths,
-    const Vector<uint32_t> *ringCounts,
-    const Vector<uint32_t> *ringLengths,
+    const Vector<uint32_t> *ends,
+    const Vector<uint32_t> *endss,
     uint8_t dimensions)
 {
     auto mp = new OGRMultiPolygon();
-    if (lengths == nullptr || lengths->size() < 2) {
-        mp->addGeometryDirectly(readPolygon(coords, coordsLength, ringLengths, dimensions));
+    if (endss == nullptr || endss->size() < 2) {
+        mp->addGeometryDirectly(readPolygon(coords, coordsLength, ends, dimensions));
     } else {
         uint32_t offset = 0;
-        for (size_t i = 0; i < lengths->size(); i++) {
+        size_t roffset = 0;
+        for (size_t i = 0; i < endss->size(); i++) {
             auto p = new OGRPolygon();
-            uint32_t ringCount = ringCounts->Get(i);
-            size_t roffset = 0;
-            for (size_t j=0; j < ringCount; j++) {
-                uint32_t ringLength = ringLengths->Get(j+roffset);
-                p->addRingDirectly(readLinearRing(coords, ringLength, dimensions, offset));
-                offset += ringLength;
-                roffset++;
+            uint32_t ringCount = endss->Get(i);
+            for (size_t j = 0; j < ringCount; j++) {
+                uint32_t end = ends->Get(roffset++);
+                p->addRingDirectly(readLinearRing(coords, end - offset, dimensions, offset));
+                offset = end;
             }
             mp->addGeometryDirectly(p);
         }
@@ -612,11 +610,11 @@ OGRGeometry *OGRFlatGeobufLayer::readGeometry(const Feature *feature, uint8_t di
         case GeometryType::LineString:
             return readLineString(coords, coordsLength, dimensions);
         case GeometryType::MultiLineString:
-            return readMultiLineString(coords, feature->lengths(), dimensions);
+            return readMultiLineString(coords, feature->ends(), dimensions);
         case GeometryType::Polygon:
-            return readPolygon(coords, coordsLength, feature->ring_lengths(), dimensions);
+            return readPolygon(coords, coordsLength, feature->ends(), dimensions);
         case GeometryType::MultiPolygon:
-            return readMultiPolygon(coords, coordsLength, feature->lengths(), feature->ring_counts(), feature->ring_lengths(), dimensions);
+            return readMultiPolygon(coords, coordsLength, feature->ends(), feature->endss(), dimensions);
         default:
             CPLError(CE_Fatal, CPLE_AppDefined, "readGeometry: Unknown FlatGeobuf::GeometryType %d", (int) m_geometryType);
     }
@@ -702,9 +700,8 @@ OGRErr OGRFlatGeobufLayer::ICreateFeature(OGRFeature *poNewFeature)
     }
 
     std::vector<double> coords;
-    std::vector<uint32_t> lengths;
-    std::vector<uint32_t> ringLengths;
-    std::vector<uint32_t> ringCounts;
+    std::vector<uint32_t> ends;
+    std::vector<uint32_t> endss;
     switch (m_geometryType) {
         case GeometryType::Point:
             writePoint(ogrGeometry->toPoint(), coords);
@@ -716,23 +713,24 @@ OGRErr OGRFlatGeobufLayer::ICreateFeature(OGRFeature *poNewFeature)
             writeLineString(ogrGeometry->toLineString(), coords);
             break;
         case GeometryType::MultiLineString:
-            writeMultiLineString(ogrGeometry->toMultiLineString(), coords, lengths);
+            writeMultiLineString(ogrGeometry->toMultiLineString(), coords, ends);
             break;
         case GeometryType::Polygon:
-            writePolygon(ogrGeometry->toPolygon(), coords, ringCounts, ringLengths);
+            writePolygon(ogrGeometry->toPolygon(), coords, ends, false, 0);
             break;
         case GeometryType::MultiPolygon:
-            writeMultiPolygon(ogrGeometry->toMultiPolygon(), coords, lengths, ringCounts, ringLengths);
+            writeMultiPolygon(ogrGeometry->toMultiPolygon(), coords, ends, endss);
             break;
         default:
             CPLError(CE_Failure, CPLE_AppDefined, "ICreateFeature: Unknown FlatGeobuf::GeometryType %d", (int) m_geometryType);
             return OGRERR_FAILURE;
     }
-    auto pLengths = lengths.size() == 0 ? nullptr : &lengths;
-    auto pRingLengths = ringLengths.size() == 0 ? nullptr : &ringLengths;
-    auto pRingCounts = ringCounts.size() == 0 ? nullptr : &ringCounts;
+    CPLDebug("FlatGeobuf", "geom encoded");
+    auto pEnds = ends.size() == 0 ? nullptr : &ends;
+    auto pEndss = endss.size() == 0 ? nullptr : &endss;
     std::vector<uint8_t> properties ( propertiesBuffer, propertiesBuffer + propertiesOffset );
-    auto feature = CreateFeatureDirect(fbb, fid, pRingCounts, pRingLengths, pLengths, &coords, &properties);
+    auto feature = CreateFeatureDirect(fbb, fid, pEnds, pEndss, &coords, &properties);
+    //auto feature = CreateFeatureDirect(fbb, fid, pEnds, pEndss, &coords, nullptr);
     fbb.FinishSizePrefixed(feature);
     delete propertiesBuffer;
 
@@ -759,6 +757,7 @@ OGRErr OGRFlatGeobufLayer::ICreateFeature(OGRFeature *poNewFeature)
 
 void OGRFlatGeobufLayer::writePoint(OGRPoint *p, std::vector<double> &coords)
 {
+    CPLDebug("FlatGeobuf", "writePoint %f", p->getX());
     coords.push_back(p->getX());
     coords.push_back(p->getY());
 }
@@ -781,41 +780,43 @@ uint32_t OGRFlatGeobufLayer::writeLineString(OGRLineString *ls, std::vector<doub
     return length;
 }
 
-void OGRFlatGeobufLayer::writeMultiLineString(OGRMultiLineString *mls, std::vector<double> &coords, std::vector<uint32_t> &lengths)
+void OGRFlatGeobufLayer::writeMultiLineString(OGRMultiLineString *mls, std::vector<double> &coords, std::vector<uint32_t> &ends)
 {
-    for (int i = 0; i < mls->getNumGeometries(); i++)
-        lengths.push_back(writeLineString(mls->getGeometryRef(i)->toLineString(), coords));
+    auto end = 0;
+    if (mls->getNumGeometries() > 1)
+        for (int i = 0; i < mls->getNumGeometries(); i++)
+            ends.push_back(end += writeLineString(mls->getGeometryRef(i)->toLineString(), coords));
+    else
+        ends.push_back(writeLineString(mls->getGeometryRef(0)->toLineString(), coords));
 }
 
-uint32_t OGRFlatGeobufLayer::writePolygon(
-    OGRPolygon *p,
-    std::vector<double> &coords,
-    std::vector<uint32_t> &ringCounts,
-    std::vector<uint32_t> &ringLengths)
+uint32_t OGRFlatGeobufLayer::writePolygon(OGRPolygon *p, std::vector<double> &coords, std::vector<uint32_t> &ends, bool isMulti, uint32_t end)
 {
-    auto length = writeLineString(p->getExteriorRing(), coords);
-    auto ringCount = p->getNumInteriorRings();
-    ringCounts.push_back(ringCount + 1);
-    ringLengths.push_back(length);
-    if (ringCount == 0)
-        return length;
-    for (int i = 0; i < ringCount; i++) {
-        auto ringLength = writeLineString(p->getInteriorRing(i), coords);
-        ringLengths.push_back(ringLength);
-        length += ringLength;
+    auto exteriorRing = p->getExteriorRing();
+    auto numInteriorRings = p->getNumInteriorRings();
+    end += writeLineString(exteriorRing, coords);
+    if (numInteriorRings > 0 || isMulti) {
+        ends.push_back(end);
+        for (int i = 0; i < numInteriorRings; i++)
+            ends.push_back(end += writeLineString(p->getInteriorRing(i), coords));
     }
-    return length;
+    return end;
 }
 
 void OGRFlatGeobufLayer::writeMultiPolygon(
     OGRMultiPolygon *mp,
     std::vector<double> &coords,
-    std::vector<uint32_t> &lengths,
-    std::vector<uint32_t> &ringCounts,
-    std::vector<uint32_t> &ringLengths)
+    std::vector<uint32_t> &ends,
+    std::vector<uint32_t> &endss)
 {
-    for (int i = 0; i < mp->getNumGeometries(); i++)
-        lengths.push_back(writePolygon(mp->getGeometryRef(i)->toPolygon(), coords, ringCounts, ringLengths));
+    uint32_t end = 0;
+    auto isMulti = mp->getNumGeometries() > 1;
+    for (int i = 0; i < mp->getNumGeometries(); i++) {
+        auto p = mp->getGeometryRef(i)->toPolygon();
+        end = writePolygon(p, coords, ends, isMulti, end);
+        if (isMulti)
+            endss.push_back(p->getNumInteriorRings() + 1);
+    }
 }
 
 int OGRFlatGeobufLayer::TestCapability(const char *pszCap)
