@@ -29,12 +29,17 @@ OGRFlatGeobufLayer::OGRFlatGeobufLayer(const Header *poHeader, const char* pszFi
 
     m_featuresCount = m_poHeader->features_count();
     m_geometryType = m_poHeader->geometry_type();
-    m_dimensions = m_poHeader->dimensions();
+    m_hasM = m_poHeader->hasM();
+    m_hasZ = m_poHeader->hasZ();
+    m_hasT = m_poHeader->hasT();
 
-    auto srs_code = m_poHeader->srs_code();
-    if (srs_code != 0) {
-        m_poSRS = new OGRSpatialReference();
-        m_poSRS->importFromEPSG(srs_code);
+    auto crs = m_poHeader->crs();
+    if (crs != nullptr) {
+        auto code = crs->code();
+        if (code != 0) {
+            m_poSRS = new OGRSpatialReference();
+            m_poSRS->importFromEPSG(code);
+        }
     }
 
     auto eGType = getOGRwkbGeometryType();
@@ -89,46 +94,32 @@ OGRFlatGeobufLayer::OGRFlatGeobufLayer(
 
 void OGRFlatGeobufLayer::translateOGRwkbGeometryType()
 {
-    switch (m_eGType) {
-        case OGRwkbGeometryType::wkbPoint: m_geometryType = GeometryType::Point; m_dimensions = 2; break;
-        case OGRwkbGeometryType::wkbPoint25D: m_geometryType = GeometryType::Point; m_dimensions = 3; break;
-        case OGRwkbGeometryType::wkbPointM: m_geometryType = GeometryType::Point; m_dimensions = 3; break;
-        case OGRwkbGeometryType::wkbPointZM: m_geometryType = GeometryType::Point; m_dimensions = 4; break;
-        case OGRwkbGeometryType::wkbMultiPoint: m_geometryType = GeometryType::MultiPoint; m_dimensions = 2; break;
-        case OGRwkbGeometryType::wkbMultiPoint25D: m_geometryType = GeometryType::MultiPoint; m_dimensions = 3; break;
-        case OGRwkbGeometryType::wkbMultiPointM: m_geometryType = GeometryType::MultiPoint; m_dimensions = 3; break;
-        case OGRwkbGeometryType::wkbMultiPointZM: m_geometryType = GeometryType::MultiPoint; m_dimensions = 4; break;
-        case OGRwkbGeometryType::wkbLineString: m_geometryType = GeometryType::LineString; m_dimensions = 2; break;
-        case OGRwkbGeometryType::wkbLineString25D: m_geometryType = GeometryType::LineString; m_dimensions = 3; break;
-        case OGRwkbGeometryType::wkbLineStringM: m_geometryType = GeometryType::LineString; m_dimensions = 3; break;
-        case OGRwkbGeometryType::wkbLineStringZM: m_geometryType = GeometryType::LineString; m_dimensions = 4; break;
-        case OGRwkbGeometryType::wkbMultiLineString: m_geometryType = GeometryType::MultiLineString; m_dimensions = 2; break;
-        case OGRwkbGeometryType::wkbMultiLineString25D: m_geometryType = GeometryType::MultiLineString; m_dimensions = 3; break;
-        case OGRwkbGeometryType::wkbMultiLineStringM: m_geometryType = GeometryType::MultiLineString; m_dimensions = 3; break;
-        case OGRwkbGeometryType::wkbMultiLineStringZM: m_geometryType = GeometryType::MultiLineString; m_dimensions = 4; break;
-        case OGRwkbGeometryType::wkbPolygon: m_geometryType = GeometryType::Polygon; m_dimensions = 2; break;
-        case OGRwkbGeometryType::wkbPolygon25D: m_geometryType = GeometryType::Polygon; m_dimensions = 3; break;
-        case OGRwkbGeometryType::wkbPolygonM: m_geometryType = GeometryType::Polygon; m_dimensions = 3; break;
-        case OGRwkbGeometryType::wkbPolygonZM: m_geometryType = GeometryType::Polygon; m_dimensions = 4; break;
-        case OGRwkbGeometryType::wkbMultiPolygon: m_geometryType = GeometryType::MultiPolygon; m_dimensions = 2; break;
-        case OGRwkbGeometryType::wkbMultiPolygon25D: m_geometryType = GeometryType::MultiPolygon; m_dimensions = 3; break;
-        case OGRwkbGeometryType::wkbMultiPolygonM: m_geometryType = GeometryType::MultiPolygon; m_dimensions = 3; break;
-        case OGRwkbGeometryType::wkbMultiPolygonZM: m_geometryType = GeometryType::MultiPolygon; m_dimensions = 4; break;
+    switch (wkbFlatten(m_eGType)) {
+        case OGRwkbGeometryType::wkbPoint: m_geometryType = GeometryType::Point; break;
+        case OGRwkbGeometryType::wkbMultiPoint: m_geometryType = GeometryType::MultiPoint; break;
+        case OGRwkbGeometryType::wkbLineString: m_geometryType = GeometryType::LineString; break;
+        case OGRwkbGeometryType::wkbMultiLineString: m_geometryType = GeometryType::MultiLineString; break;
+        case OGRwkbGeometryType::wkbPolygon: m_geometryType = GeometryType::Polygon; break;
+        case OGRwkbGeometryType::wkbMultiPolygon: m_geometryType = GeometryType::MultiPolygon; break;
         default:
             CPLError(CE_Fatal, CPLE_NotSupported, "toGeometryType: Unknown OGRwkbGeometryType %d", (int) m_eGType);
     }
+    if wkbHasZ(m_eGType)
+        m_hasZ = true;
+    if wkbHasM(m_eGType)
+        m_hasM = true;
     return;
 }
 
 OGRwkbGeometryType OGRFlatGeobufLayer::getOGRwkbGeometryType()
 {
     switch (m_geometryType) {
-        case GeometryType::Point: return m_dimensions == 2 ? OGRwkbGeometryType::wkbPoint : OGRwkbGeometryType::wkbPoint25D;
-        case GeometryType::MultiPoint: return m_dimensions == 2 ? OGRwkbGeometryType::wkbMultiPoint : OGRwkbGeometryType::wkbMultiPoint25D;
-        case GeometryType::LineString: return m_dimensions == 2 ? OGRwkbGeometryType::wkbLineString : OGRwkbGeometryType::wkbLineString25D;
-        case GeometryType::MultiLineString: return m_dimensions == 2 ? OGRwkbGeometryType::wkbMultiLineString : OGRwkbGeometryType::wkbMultiLineString25D;
-        case GeometryType::Polygon: return m_dimensions == 2 ? OGRwkbGeometryType::wkbPolygon : OGRwkbGeometryType::wkbPolygon25D;
-        case GeometryType::MultiPolygon: return m_dimensions == 2 ? OGRwkbGeometryType::wkbMultiPolygon : OGRwkbGeometryType::wkbMultiPolygon25D;
+        case GeometryType::Point: return OGRwkbGeometryType::wkbPoint;
+        case GeometryType::MultiPoint: return OGRwkbGeometryType::wkbMultiPoint;
+        case GeometryType::LineString: return OGRwkbGeometryType::wkbLineString;
+        case GeometryType::MultiLineString: return OGRwkbGeometryType::wkbMultiLineString;
+        case GeometryType::Polygon: return OGRwkbGeometryType::wkbPolygon;
+        case GeometryType::MultiPolygon: return OGRwkbGeometryType::wkbMultiPolygon;
         default:
             CPLError(CE_Fatal, CPLE_NotSupported, "toOGRwkbGeometryType: Unknown FlatGeobuf::GeometryType %d", (int) m_geometryType);
     }
@@ -207,35 +198,38 @@ OGRFlatGeobufLayer::~OGRFlatGeobufLayer()
         CPLDebug("FlatGeobuf", "Wrote magicbytes (%zu bytes)", c * sizeof(magicbytes));
 
         Rect extent = calcExtent(m_featureItems);
-
-        CPLDebug("FlatGeobuf", "Sorting items for Packed R-tree");
-        hilbertSort(m_featureItems);
-
-        CPLDebug("FlatGeobuf", "Creating Packed R-tree");
-        PackedRTree tree(m_featureItems, extent);
         const auto extentVector = extent.toVector();
-        CPLDebug("FlatGeobuf", "PackedRTree extent %f, %f, %f, %f", extentVector[0], extentVector[1], extentVector[2], extentVector[3]);
 
         FlatBufferBuilder fbb;
         auto columns = writeColumns(fbb);
-        int32_t srs_code = 0;
+
+        uint16_t indexNodeSize = bCreateSpatialIndexAtClose ? 16 : 0;
+
+        auto crs = 0;
         // TODO: this can crash for some inputs
         /*if (m_poSRS != nullptr) {
             auto code = m_poSRS->GetEPSGGeogCS();
             if (code != -1) {
                 CPLDebug("FlatGeobuf", "Creating SRS with EPSG code %d", code);
-                srs = CreateSrsDirect(fbb, code);
+                crs = CreateCrsDirect(fbb, code);
             }
         }*/
 
         auto header = CreateHeaderDirect(
-            fbb, m_pszLayerName, &extentVector, m_geometryType, m_dimensions, &columns, m_featuresCount, true, 16, srs_code);
+            fbb, m_pszLayerName, &extentVector, m_geometryType, m_hasZ, m_hasM, m_hasT, &columns, m_featuresCount, true, indexNodeSize, 0);
         fbb.FinishSizePrefixed(header);
         c = VSIFWriteL(fbb.GetBufferPointer(), 1, fbb.GetSize(), fp);
         CPLDebug("FlatGeobuf", "Wrote header (%zu bytes)", c);
 
-        c = VSIFWriteL(tree.toData(), 1, tree.size(), fp);
-        CPLDebug("FlatGeobuf", "Wrote tree (%zu bytes)", c);
+        if (bCreateSpatialIndexAtClose) {
+            CPLDebug("FlatGeobuf", "Sorting items for Packed R-tree");
+            hilbertSort(m_featureItems);
+            CPLDebug("FlatGeobuf", "Creating Packed R-tree");
+            PackedRTree tree(m_featureItems, extent);
+            CPLDebug("FlatGeobuf", "PackedRTree extent %f, %f, %f, %f", extentVector[0], extentVector[1], extentVector[2], extentVector[3]);
+            c = VSIFWriteL(tree.toData(), 1, tree.size(), fp);
+            CPLDebug("FlatGeobuf", "Wrote tree (%zu bytes)", c);
+        }
 
         c = 0;
         for (uint64_t i = 0, offset = 0; i < m_featuresCount; i++) {
@@ -384,7 +378,7 @@ OGRFeature *OGRFlatGeobufLayer::GetNextFeature()
     auto fid = feature->fid();
     poFeature->SetFID(fid);
     //CPLDebug("FlatGeobuf", "fid: %zu", fid);
-    auto ogrGeometry = readGeometry(feature, m_dimensions);
+    auto ogrGeometry = readGeometry(feature);
 #ifdef DEBUG
     //char *wkt;
     //ogrGeometry->exportToWkt(&wkt);
@@ -442,7 +436,7 @@ OGRFeature *OGRFlatGeobufLayer::GetNextFeature()
     return poFeature;
 }
 
-void OGRFlatGeobufLayer::ensurePadfBuffers(size_t count, uint8_t dimensions)
+void OGRFlatGeobufLayer::ensurePadfBuffers(size_t count)
 {
     size_t requiredSize = count * sizeof(double);
     if (m_padfSize == 0) {
@@ -450,118 +444,121 @@ void OGRFlatGeobufLayer::ensurePadfBuffers(size_t count, uint8_t dimensions)
         CPLDebug("FlatGeobuf", "m_padfSize: %zu", m_padfSize);
         m_padfX = static_cast<double *>(CPLMalloc(m_padfSize));
         m_padfY = static_cast<double *>(CPLMalloc(m_padfSize));
-        if (dimensions > 2)
+        if (m_hasZ)
             m_padfZ = static_cast<double *>(CPLMalloc(m_padfSize));
-        if (dimensions > 3)
+        if (m_hasM)
             m_padfM = static_cast<double *>(CPLMalloc(m_padfSize));
     } else if (m_padfSize < requiredSize) {
         m_padfSize = std::max(m_padfSize * 2, requiredSize);
         CPLDebug("FlatGeobuf", "m_padfSize: %zu", m_padfSize);
         m_padfX = static_cast<double *>(CPLRealloc(m_padfX, m_padfSize));
         m_padfY = static_cast<double *>(CPLRealloc(m_padfY, m_padfSize));
-        if (dimensions > 2)
+        if (m_hasZ)
             m_padfZ = static_cast<double *>(CPLRealloc(m_padfZ, m_padfSize));
-        if (dimensions > 3)
+        if (m_hasM)
             m_padfM = static_cast<double *>(CPLRealloc(m_padfM, m_padfSize));
     }
 }
 
-OGRPoint *OGRFlatGeobufLayer::readPoint(const double *coords, uint8_t dimensions, uint32_t offset)
+OGRPoint *OGRFlatGeobufLayer::readPoint(const double *coords, uint32_t offset)
 {
-    if (dimensions == 2)
-        return new OGRPoint { coords[offset + 0], coords[offset + 1] };
+    return new OGRPoint { coords[offset + 0], coords[offset + 1] };
+    // TODO: Z M ??
+    /*
     else if (dimensions == 3)
         return new OGRPoint { coords[offset + 0], coords[offset + 1], coords[offset + 2] };
     else if (dimensions == 4)
         return new OGRPoint { coords[offset + 0], coords[offset + 1], coords[offset + 2], coords[offset + 3] };
+    */
     CPLError(CE_Fatal, CPLE_AppDefined, "readPoint: Unsupported number of dimensions");
     return nullptr;
 }
 
-OGRMultiPoint *OGRFlatGeobufLayer::readMultiPoint(const double *coords, uint32_t coordsLength, uint8_t dimensions)
+OGRMultiPoint *OGRFlatGeobufLayer::readMultiPoint(const double *coords, uint32_t coordsLength)
 {
     auto mp = new OGRMultiPoint();
-    for (size_t i = 0; i < coordsLength; i = i + dimensions)
-        mp->addGeometryDirectly(readPoint(coords, dimensions, i));
+    for (size_t i = 0; i < coordsLength; i = i + 2)
+        mp->addGeometryDirectly(readPoint(coords, i));
     return mp;
 }
 
-OGRLineString *OGRFlatGeobufLayer::readLineString(const double *coords, uint32_t coordsLength, uint8_t dimensions, uint32_t offset)
+OGRLineString *OGRFlatGeobufLayer::readLineString(const double *coords, uint32_t coordsLength, uint32_t offset)
 {
     auto ls = new OGRLineString();
-    size_t dimLength = coordsLength / dimensions;
 
-    ensurePadfBuffers(dimLength, dimensions);
+    ensurePadfBuffers(coordsLength >> 1);
 
     unsigned int c = 0;
-    for (size_t i = offset; i < offset + coordsLength; i = i + dimensions) {
+    for (size_t i = offset; i < offset + coordsLength; i = i + 2) {
         m_padfX[c] = coords[i];
         m_padfY[c] = coords[i+1];
-        if (dimensions > 2)
+        if (m_hasZ)
             m_padfZ[c] = coords[i+2];
-        if (dimensions > 3)
+        if (m_hasM)
             m_padfM[c] = coords[i+3];
         c++;
     }
-    ls->setNumPoints(dimLength, 0);
-    if (dimensions == 2)
-        ls->setPoints(dimLength, m_padfX, m_padfY);
-    else if (dimensions == 3)
+    ls->setNumPoints(coordsLength >> 1, 0);
+    ls->setPoints(coordsLength >> 1, m_padfX, m_padfY);
+    // TODO: handle hasZ hasM
+    /*else if (dimensions == 3)
         ls->setPoints(dimLength, m_padfX, m_padfY, m_padfZ);
     else if (dimensions == 4)
         ls->setPoints(dimLength, m_padfX, m_padfY, m_padfZ, m_padfM);
+    */
     return ls;
 }
 
-OGRMultiLineString *OGRFlatGeobufLayer::readMultiLineString(const double *coords, const flatbuffers::Vector<uint32_t> *ends, uint8_t dimensions)
+OGRMultiLineString *OGRFlatGeobufLayer::readMultiLineString(const double *coords, const flatbuffers::Vector<uint32_t> *ends)
 {
     auto mls = new OGRMultiLineString();
     uint32_t offset = 0;
     for (size_t i = 0; i < ends->size(); i++) {
         auto end = ends->Get(i);
-        auto ls = readLineString(coords, end, dimensions, offset);
+        auto ls = readLineString(coords, end, offset);
         mls->addGeometryDirectly(ls);
         offset = end;
     }
     return mls;
 }
 
-OGRLinearRing *OGRFlatGeobufLayer::readLinearRing(const double *coords, uint32_t coordsLength, uint8_t dimensions, uint32_t offset)
+OGRLinearRing *OGRFlatGeobufLayer::readLinearRing(const double *coords, uint32_t coordsLength, uint32_t offset)
 {
     auto ls = new OGRLinearRing();
-    size_t dimLength = coordsLength / dimensions;
 
-    ensurePadfBuffers(dimLength, dimensions);
+    ensurePadfBuffers(coordsLength);
 
     unsigned int c = 0;
-    for (size_t i = offset; i < offset + coordsLength; i = i + dimensions) {
+    for (size_t i = offset; i < offset + coordsLength; i = i + 2) {
         m_padfX[c] = coords[i];
         m_padfY[c] = coords[i+1];
-        if (dimensions > 2)
+        if (m_hasZ)
             m_padfZ[c] = coords[i+2];
-        if (dimensions > 3)
+        if (m_hasM)
             m_padfM[c] = coords[i+3];
         c++;
     }
-    ls->setNumPoints(dimLength, 0);
-    if (dimensions == 2)
-        ls->setPoints(dimLength, m_padfX, m_padfY);
+    ls->setNumPoints(coordsLength >> 1, 0);
+    ls->setPoints(coordsLength >> 1, m_padfX, m_padfY);
+    // TODO: handle Z / M
+    /*
     else if (dimensions == 3)
         ls->setPoints(dimLength, m_padfX, m_padfY, m_padfZ);
     else if (dimensions == 4)
         ls->setPoints(dimLength, m_padfX, m_padfY, m_padfZ, m_padfM);
+    */
     return ls;
 }
 
-OGRPolygon *OGRFlatGeobufLayer::readPolygon(const double *coords, uint32_t coordsLength, const Vector<uint32_t> *ends, uint8_t dimensions, uint32_t offset)
+OGRPolygon *OGRFlatGeobufLayer::readPolygon(const double *coords, uint32_t coordsLength, const Vector<uint32_t> *ends, uint32_t offset)
 {
     auto p = new OGRPolygon();
     if (ends == nullptr || ends->size() < 2) {
-        p->addRingDirectly(readLinearRing(coords, coordsLength, dimensions));
+        p->addRingDirectly(readLinearRing(coords, coordsLength));
     } else {
         for (size_t i = 0; i < ends->size(); i++) {
             auto end = ends->Get(i);
-            p->addRingDirectly(readLinearRing(coords, end - offset, dimensions, offset));
+            p->addRingDirectly(readLinearRing(coords, end - offset, offset));
             offset = end;
         }
     }
@@ -572,12 +569,11 @@ OGRMultiPolygon *OGRFlatGeobufLayer::readMultiPolygon(
     const double *coords,
     uint32_t coordsLength,
     const Vector<uint32_t> *ends,
-    const Vector<uint32_t> *endss,
-    uint8_t dimensions)
+    const Vector<uint32_t> *endss)
 {
     auto mp = new OGRMultiPolygon();
     if (endss == nullptr || endss->size() < 2) {
-        mp->addGeometryDirectly(readPolygon(coords, coordsLength, ends, dimensions));
+        mp->addGeometryDirectly(readPolygon(coords, coordsLength, ends));
     } else {
         uint32_t offset = 0;
         size_t roffset = 0;
@@ -586,7 +582,7 @@ OGRMultiPolygon *OGRFlatGeobufLayer::readMultiPolygon(
             uint32_t ringCount = endss->Get(i);
             for (size_t j = 0; j < ringCount; j++) {
                 uint32_t end = ends->Get(roffset++);
-                p->addRingDirectly(readLinearRing(coords, end - offset, dimensions, offset));
+                p->addRingDirectly(readLinearRing(coords, end - offset, offset));
                 offset = end;
             }
             mp->addGeometryDirectly(p);
@@ -595,26 +591,26 @@ OGRMultiPolygon *OGRFlatGeobufLayer::readMultiPolygon(
     return mp;
 }
 
-OGRGeometry *OGRFlatGeobufLayer::readGeometry(const Feature *feature, uint8_t dimensions)
+OGRGeometry *OGRFlatGeobufLayer::readGeometry(const Feature *feature)
 {
-    auto pCoords = feature->coords();
-    if (pCoords == nullptr)
+    auto pXy = feature->xy();
+    if (pXy == nullptr)
         CPLError(CE_Fatal, CPLE_AppDefined, "readGeometry: Geometry has no coordinates");
-    auto coords = pCoords->data();
-    auto coordsLength = pCoords->size();
+    auto xy = pXy->data();
+    auto xySize = pXy->size();
     switch (m_geometryType) {
         case GeometryType::Point:
-            return readPoint(coords, dimensions);
+            return readPoint(xy);
         case GeometryType::MultiPoint:
-            return readMultiPoint(coords, coordsLength, dimensions);
+            return readMultiPoint(xy, xySize);
         case GeometryType::LineString:
-            return readLineString(coords, coordsLength, dimensions);
+            return readLineString(xy, xySize);
         case GeometryType::MultiLineString:
-            return readMultiLineString(coords, feature->ends(), dimensions);
+            return readMultiLineString(xy, feature->ends());
         case GeometryType::Polygon:
-            return readPolygon(coords, coordsLength, feature->ends(), dimensions);
+            return readPolygon(xy, xySize, feature->ends());
         case GeometryType::MultiPolygon:
-            return readMultiPolygon(coords, coordsLength, feature->ends(), feature->endss(), dimensions);
+            return readMultiPolygon(xy, xySize, feature->ends(), feature->endss());
         default:
             CPLError(CE_Fatal, CPLE_AppDefined, "readGeometry: Unknown FlatGeobuf::GeometryType %d", (int) m_geometryType);
     }
@@ -699,27 +695,27 @@ OGRErr OGRFlatGeobufLayer::ICreateFeature(OGRFeature *poNewFeature)
         return OGRERR_FAILURE;
     }
 
-    std::vector<double> coords;
+    std::vector<double> xy;
     std::vector<uint32_t> ends;
     std::vector<uint32_t> endss;
     switch (m_geometryType) {
         case GeometryType::Point:
-            writePoint(ogrGeometry->toPoint(), coords);
+            writePoint(ogrGeometry->toPoint(), xy);
             break;
         case GeometryType::MultiPoint:
-            writeMultiPoint(ogrGeometry->toMultiPoint(), coords);
+            writeMultiPoint(ogrGeometry->toMultiPoint(), xy);
             break;
         case GeometryType::LineString:
-            writeLineString(ogrGeometry->toLineString(), coords);
+            writeLineString(ogrGeometry->toLineString(), xy);
             break;
         case GeometryType::MultiLineString:
-            writeMultiLineString(ogrGeometry->toMultiLineString(), coords, ends);
+            writeMultiLineString(ogrGeometry->toMultiLineString(), xy, ends);
             break;
         case GeometryType::Polygon:
-            writePolygon(ogrGeometry->toPolygon(), coords, ends, false, 0);
+            writePolygon(ogrGeometry->toPolygon(), xy, ends, false, 0);
             break;
         case GeometryType::MultiPolygon:
-            writeMultiPolygon(ogrGeometry->toMultiPolygon(), coords, ends, endss);
+            writeMultiPolygon(ogrGeometry->toMultiPolygon(), xy, ends, endss);
             break;
         default:
             CPLError(CE_Failure, CPLE_AppDefined, "ICreateFeature: Unknown FlatGeobuf::GeometryType %d", (int) m_geometryType);
@@ -729,7 +725,7 @@ OGRErr OGRFlatGeobufLayer::ICreateFeature(OGRFeature *poNewFeature)
     auto pEnds = ends.size() == 0 ? nullptr : &ends;
     auto pEndss = endss.size() == 0 ? nullptr : &endss;
     std::vector<uint8_t> properties ( propertiesBuffer, propertiesBuffer + propertiesOffset );
-    auto feature = CreateFeatureDirect(fbb, fid, pEnds, pEndss, &coords, &properties);
+    auto feature = CreateFeatureDirect(fbb, fid, pEnds, pEndss, &xy, nullptr, nullptr, nullptr, &properties);
     //auto feature = CreateFeatureDirect(fbb, fid, pEnds, pEndss, &coords, nullptr);
     fbb.FinishSizePrefixed(feature);
     delete propertiesBuffer;
@@ -757,7 +753,7 @@ OGRErr OGRFlatGeobufLayer::ICreateFeature(OGRFeature *poNewFeature)
 
 void OGRFlatGeobufLayer::writePoint(OGRPoint *p, std::vector<double> &coords)
 {
-    CPLDebug("FlatGeobuf", "writePoint %f", p->getX());
+    CPLDebug("FlatGeobuf", "writePoint %f %f", p->getX(), p->getY());
     coords.push_back(p->getX());
     coords.push_back(p->getY());
 }

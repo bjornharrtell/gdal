@@ -30,7 +30,10 @@ class OGRFlatGeobufLayer : public OGRLayer
         const Header *m_poHeader = nullptr;
         OGRwkbGeometryType m_eGType;
         GeometryType m_geometryType;
-        uint8_t m_dimensions = 2;
+        //uint8_t m_dimensions = 2;
+        bool m_hasM;
+        bool m_hasZ;
+        bool m_hasT;
         uint64_t m_featuresCount = 0;
 
         OGRFeatureDefn *m_poFeatureDefn = nullptr;
@@ -58,16 +61,18 @@ class OGRFlatGeobufLayer : public OGRLayer
         double *m_padfZ = nullptr;
         double *m_padfM = nullptr;
 
+        bool bCreateSpatialIndexAtClose;
+
         // deserialize
-        void ensurePadfBuffers(size_t count, uint8_t dimensions);
-        OGRPoint *readPoint(const double *coords, uint8_t dimensions, uint32_t offset = 0);
-        OGRMultiPoint *readMultiPoint(const double *coords, uint32_t coordsLength, uint8_t dimensions);
-        OGRLineString *readLineString(const double *coords, uint32_t coordsLength, uint8_t dimensions, uint32_t offset = 0);
-        OGRMultiLineString *readMultiLineString(const double *coords, const flatbuffers::Vector<uint32_t> *ends, uint8_t dimensions);
-        OGRLinearRing *readLinearRing(const double *coords, uint32_t coordsLength, uint8_t dimensions, uint32_t offset = 0);
-        OGRPolygon *readPolygon(const double *coords, uint32_t coordsLength, const flatbuffers::Vector<uint32_t> *ends, uint8_t dimensions, uint32_t offset = 0);
-        OGRMultiPolygon *readMultiPolygon(const double *coords, uint32_t coordsLength, const flatbuffers::Vector<uint32_t> *ends, const flatbuffers::Vector<uint32_t> *endss, uint8_t dimensions);
-        OGRGeometry *readGeometry(const Feature* feature, uint8_t dimensions);
+        void ensurePadfBuffers(size_t count);
+        OGRPoint *readPoint(const double *coords, uint32_t offset = 0);
+        OGRMultiPoint *readMultiPoint(const double *coords, uint32_t coordsLength);
+        OGRLineString *readLineString(const double *coords, uint32_t coordsLength, uint32_t offset = 0);
+        OGRMultiLineString *readMultiLineString(const double *coords, const flatbuffers::Vector<uint32_t> *ends);
+        OGRLinearRing *readLinearRing(const double *coords, uint32_t coordsLength, uint32_t offset = 0);
+        OGRPolygon *readPolygon(const double *coords, uint32_t coordsLength, const flatbuffers::Vector<uint32_t> *ends, uint32_t offset = 0);
+        OGRMultiPolygon *readMultiPolygon(const double *coords, uint32_t coordsLength, const flatbuffers::Vector<uint32_t> *ends, const flatbuffers::Vector<uint32_t> *endss);
+        OGRGeometry *readGeometry(const Feature* feature);
         ColumnType toColumnType(OGRFieldType fieldType, OGRFieldSubType subType);
         OGRFieldType toOGRFieldType(ColumnType type);
         const std::vector<flatbuffers::Offset<Column>> writeColumns(flatbuffers::FlatBufferBuilder &fbb);
@@ -98,6 +103,8 @@ class OGRFlatGeobufLayer : public OGRLayer
         virtual void ResetReading() override;
         virtual OGRFeatureDefn *GetLayerDefn() override { return m_poFeatureDefn; }
         virtual GIntBig GetFeatureCount(int bForce) override;
+
+        void CreateSpatialIndexAtClose( int bFlag ) { bCreateSpatialIndexAtClose = CPL_TO_BOOL(bFlag); }
 };
 
 class OGRFlatGeobufDataset final: public GDALDataset

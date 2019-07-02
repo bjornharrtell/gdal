@@ -115,6 +115,7 @@ GDALDataset *OGRFlatGeobufDataset::Open(GDALOpenInfo* poOpenInfo)
     VSIFSeekL(fp, offset, SEEK_SET);
     uint32_t headerSize;
     VSIFReadL(&headerSize, 4, 1, fp);
+    CPLDebug("FlatGeobuf", "headerSize at offset (%lu)", headerSize);
     GByte* buf = static_cast<GByte*>(VSI_MALLOC_VERBOSE(headerSize));
     VSIFReadL(buf, 1, headerSize, fp);
     auto header = GetHeader(buf);
@@ -129,6 +130,7 @@ GDALDataset *OGRFlatGeobufDataset::Open(GDALOpenInfo* poOpenInfo)
 
     auto poDS = new OGRFlatGeobufDataset();
     poDS->SetDescription(osFilename);
+
     poDS->m_apoLayers.push_back(
         std::unique_ptr<OGRLayer>(new OGRFlatGeobufLayer(header, osFilename, offset))
     );
@@ -141,7 +143,7 @@ GDALDataset *OGRFlatGeobufDataset::Create( const char *pszName,
                                         CPL_UNUSED int nXSize,
                                         CPL_UNUSED int nYSize,
                                         CPL_UNUSED GDALDataType eDT,
-                                        char ** /*papszOptions*/ )
+                                        char ** /* papszOptions */)
 {
     // First, ensure there isn't any such file yet.
     VSIStatBufL sStatBuf;
@@ -233,7 +235,7 @@ int OGRFlatGeobufDataset::TestCapability( const char * pszCap )
 OGRLayer* OGRFlatGeobufDataset::ICreateLayer( const char *pszLayerName,
                                 OGRSpatialReference *poSpatialRef,
                                 OGRwkbGeometryType eGType,
-                                char ** /*papszOptions*/ )
+                                char **papszOptions )
 {
     // Verify we are in update mode.
     if( !m_create )
@@ -282,6 +284,9 @@ OGRLayer* OGRFlatGeobufDataset::ICreateLayer( const char *pszLayerName,
 
     // Create a layer.
     OGRFlatGeobufLayer *poLayer = new OGRFlatGeobufLayer(pszLayerName, osFilename, poSpatialRef, eGType);
+
+    poLayer->CreateSpatialIndexAtClose(
+        CPLFetchBool( papszOptions, "SPATIAL_INDEX", true ) );
 
     m_apoLayers.push_back(
         std::unique_ptr<OGRLayer>(poLayer)

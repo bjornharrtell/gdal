@@ -15,8 +15,11 @@ struct Feature FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
     VT_FID = 4,
     VT_ENDS = 6,
     VT_ENDSS = 8,
-    VT_COORDS = 10,
-    VT_PROPERTIES = 12
+    VT_XY = 10,
+    VT_Z = 12,
+    VT_M = 14,
+    VT_T = 16,
+    VT_PROPERTIES = 18
   };
   uint64_t fid() const {
     return GetField<uint64_t>(VT_FID, 0);
@@ -27,8 +30,17 @@ struct Feature FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
   const flatbuffers::Vector<uint32_t> *endss() const {
     return GetPointer<const flatbuffers::Vector<uint32_t> *>(VT_ENDSS);
   }
-  const flatbuffers::Vector<double> *coords() const {
-    return GetPointer<const flatbuffers::Vector<double> *>(VT_COORDS);
+  const flatbuffers::Vector<double> *xy() const {
+    return GetPointer<const flatbuffers::Vector<double> *>(VT_XY);
+  }
+  const flatbuffers::Vector<double> *z() const {
+    return GetPointer<const flatbuffers::Vector<double> *>(VT_Z);
+  }
+  const flatbuffers::Vector<double> *m() const {
+    return GetPointer<const flatbuffers::Vector<double> *>(VT_M);
+  }
+  const flatbuffers::Vector<double> *t() const {
+    return GetPointer<const flatbuffers::Vector<double> *>(VT_T);
   }
   const flatbuffers::Vector<uint8_t> *properties() const {
     return GetPointer<const flatbuffers::Vector<uint8_t> *>(VT_PROPERTIES);
@@ -40,8 +52,14 @@ struct Feature FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
            verifier.VerifyVector(ends()) &&
            VerifyOffset(verifier, VT_ENDSS) &&
            verifier.VerifyVector(endss()) &&
-           VerifyOffset(verifier, VT_COORDS) &&
-           verifier.VerifyVector(coords()) &&
+           VerifyOffset(verifier, VT_XY) &&
+           verifier.VerifyVector(xy()) &&
+           VerifyOffset(verifier, VT_Z) &&
+           verifier.VerifyVector(z()) &&
+           VerifyOffset(verifier, VT_M) &&
+           verifier.VerifyVector(m()) &&
+           VerifyOffset(verifier, VT_T) &&
+           verifier.VerifyVector(t()) &&
            VerifyOffset(verifier, VT_PROPERTIES) &&
            verifier.VerifyVector(properties()) &&
            verifier.EndTable();
@@ -60,8 +78,17 @@ struct FeatureBuilder {
   void add_endss(flatbuffers::Offset<flatbuffers::Vector<uint32_t>> endss) {
     fbb_.AddOffset(Feature::VT_ENDSS, endss);
   }
-  void add_coords(flatbuffers::Offset<flatbuffers::Vector<double>> coords) {
-    fbb_.AddOffset(Feature::VT_COORDS, coords);
+  void add_xy(flatbuffers::Offset<flatbuffers::Vector<double>> xy) {
+    fbb_.AddOffset(Feature::VT_XY, xy);
+  }
+  void add_z(flatbuffers::Offset<flatbuffers::Vector<double>> z) {
+    fbb_.AddOffset(Feature::VT_Z, z);
+  }
+  void add_m(flatbuffers::Offset<flatbuffers::Vector<double>> m) {
+    fbb_.AddOffset(Feature::VT_M, m);
+  }
+  void add_t(flatbuffers::Offset<flatbuffers::Vector<double>> t) {
+    fbb_.AddOffset(Feature::VT_T, t);
   }
   void add_properties(flatbuffers::Offset<flatbuffers::Vector<uint8_t>> properties) {
     fbb_.AddOffset(Feature::VT_PROPERTIES, properties);
@@ -83,12 +110,18 @@ inline flatbuffers::Offset<Feature> CreateFeature(
     uint64_t fid = 0,
     flatbuffers::Offset<flatbuffers::Vector<uint32_t>> ends = 0,
     flatbuffers::Offset<flatbuffers::Vector<uint32_t>> endss = 0,
-    flatbuffers::Offset<flatbuffers::Vector<double>> coords = 0,
+    flatbuffers::Offset<flatbuffers::Vector<double>> xy = 0,
+    flatbuffers::Offset<flatbuffers::Vector<double>> z = 0,
+    flatbuffers::Offset<flatbuffers::Vector<double>> m = 0,
+    flatbuffers::Offset<flatbuffers::Vector<double>> t = 0,
     flatbuffers::Offset<flatbuffers::Vector<uint8_t>> properties = 0) {
   FeatureBuilder builder_(_fbb);
   builder_.add_fid(fid);
   builder_.add_properties(properties);
-  builder_.add_coords(coords);
+  builder_.add_t(t);
+  builder_.add_m(m);
+  builder_.add_z(z);
+  builder_.add_xy(xy);
   builder_.add_endss(endss);
   builder_.add_ends(ends);
   return builder_.Finish();
@@ -99,18 +132,27 @@ inline flatbuffers::Offset<Feature> CreateFeatureDirect(
     uint64_t fid = 0,
     const std::vector<uint32_t> *ends = nullptr,
     const std::vector<uint32_t> *endss = nullptr,
-    const std::vector<double> *coords = nullptr,
+    const std::vector<double> *xy = nullptr,
+    const std::vector<double> *z = nullptr,
+    const std::vector<double> *m = nullptr,
+    const std::vector<double> *t = nullptr,
     const std::vector<uint8_t> *properties = nullptr) {
   auto ends__ = ends ? _fbb.CreateVector<uint32_t>(*ends) : 0;
   auto endss__ = endss ? _fbb.CreateVector<uint32_t>(*endss) : 0;
-  auto coords__ = coords ? _fbb.CreateVector<double>(*coords) : 0;
+  auto xy__ = xy ? _fbb.CreateVector<double>(*xy) : 0;
+  auto z__ = z ? _fbb.CreateVector<double>(*z) : 0;
+  auto m__ = m ? _fbb.CreateVector<double>(*m) : 0;
+  auto t__ = t ? _fbb.CreateVector<double>(*t) : 0;
   auto properties__ = properties ? _fbb.CreateVector<uint8_t>(*properties) : 0;
   return FlatGeobuf::CreateFeature(
       _fbb,
       fid,
       ends__,
       endss__,
-      coords__,
+      xy__,
+      z__,
+      m__,
+      t__,
       properties__);
 }
 
