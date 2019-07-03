@@ -115,7 +115,7 @@ GDALDataset *OGRFlatGeobufDataset::Open(GDALOpenInfo* poOpenInfo)
     VSIFSeekL(fp, offset, SEEK_SET);
     uint32_t headerSize;
     VSIFReadL(&headerSize, 4, 1, fp);
-    CPLDebug("FlatGeobuf", "headerSize at offset (%lu)", headerSize);
+    CPLDebug("FlatGeobuf", "headerSize (%lu)", headerSize);
     GByte* buf = static_cast<GByte*>(VSI_MALLOC_VERBOSE(headerSize));
     VSIFReadL(buf, 1, headerSize, fp);
     auto header = GetHeader(buf);
@@ -127,6 +127,8 @@ GDALDataset *OGRFlatGeobufDataset::Open(GDALOpenInfo* poOpenInfo)
     CPLDebug("FlatGeobuf", "Add treeSize to offset (%zu)", treeSize);
     offset += featuresCount * 8;
     CPLDebug("FlatGeobuf", "Add featuresCount * 8 to offset (%zu)", featuresCount * 8);
+
+    CPLDebug("FlatGeobuf", "Features start at offset (%zu)", offset);
 
     auto poDS = new OGRFlatGeobufDataset();
     poDS->SetDescription(osFilename);

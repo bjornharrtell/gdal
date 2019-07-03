@@ -183,6 +183,7 @@ OGRFlatGeobufLayer::~OGRFlatGeobufLayer()
     if (m_create) {
         CPLDebug("FlatGeobuf", "Request to create %zu features", m_featuresCount);
         size_t c;
+        uint64_t offset = 0;
 
         //const char *filename = CPLFormFilename("", m_pszLayerName, "fgb");
         CPLDebug("FlatGeobuf", "m_pszFilename: %s", m_pszFilename);
@@ -197,6 +198,7 @@ OGRFlatGeobufLayer::~OGRFlatGeobufLayer()
 
         c = VSIFWriteL(&magicbytes, sizeof(magicbytes), 1, fp);
         CPLDebug("FlatGeobuf", "Wrote magicbytes (%zu bytes)", c * sizeof(magicbytes));
+        offset += c;
 
         Rect extent = calcExtent(m_featureItems);
         const auto extentVector = extent.toVector();
@@ -221,6 +223,7 @@ OGRFlatGeobufLayer::~OGRFlatGeobufLayer()
         fbb.FinishSizePrefixed(header);
         c = VSIFWriteL(fbb.GetBufferPointer(), 1, fbb.GetSize(), fp);
         CPLDebug("FlatGeobuf", "Wrote header (%zu bytes)", c);
+        offset += c;
 
         if (bCreateSpatialIndexAtClose) {
             CPLDebug("FlatGeobuf", "Sorting items for Packed R-tree");
@@ -230,19 +233,24 @@ OGRFlatGeobufLayer::~OGRFlatGeobufLayer()
             CPLDebug("FlatGeobuf", "PackedRTree extent %f, %f, %f, %f", extentVector[0], extentVector[1], extentVector[2], extentVector[3]);
             c = VSIFWriteL(tree.toData(), 1, tree.size(), fp);
             CPLDebug("FlatGeobuf", "Wrote tree (%zu bytes)", c);
+            offset += c;
         }
 
+        CPLDebug("FlatGeobuf", "Writing feature offsets at offset %zu", offset);
         c = 0;
-        for (uint64_t i = 0, offset = 0; i < m_featuresCount; i++) {
-            c += VSIFWriteL(&offset, 8, 1, fp);
-            offset += static_cast<FeatureItem *>(m_featureItems[i])->size;
+        for (uint64_t i = 0, foffset = 0; i < m_featuresCount; i++) {
+            c += VSIFWriteL(&foffset, 8, 1, fp);
+            foffset += static_cast<FeatureItem *>(m_featureItems[i])->size;
         }
         CPLDebug("FlatGeobuf", "Wrote feature offsets (%zu bytes)", c * 8);
+        offset += c * 8;
 
+        CPLDebug("FlatGeobuf", "Writing feature buffers at offset %zu ", offset);
         c = 0;
         for (uint64_t i = 0; i < m_featuresCount; i++)
             c += VSIFWriteL(static_cast<FeatureItem *>(m_featureItems[i])->data, 1, static_cast<FeatureItem *>(m_featureItems[i])->size, fp);
         CPLDebug("FlatGeobuf", "Wrote feature buffers (%zu bytes)", c);
+        offset += c;
 
         VSIFCloseL(fp);
     }
@@ -447,7 +455,7 @@ OGRMultiPoint *OGRFlatGeobufLayer::readMultiPoint(const double *coords, uint32_t
 OGRLineString *OGRFlatGeobufLayer::readLineString(const double *coords, uint32_t coordsLength, uint32_t offset)
 {
     auto ls = new OGRLineString();
-    ls->setPoints(coordsLength >> 1, (OGRRawPoint *) coords);
+    ls->setPoints(coordsLength >> 1, (OGRRawPoint *) coords + offset);
     // TODO: handle Z / M
     return ls;
 }
@@ -468,7 +476,7 @@ OGRMultiLineString *OGRFlatGeobufLayer::readMultiLineString(const double *coords
 OGRLinearRing *OGRFlatGeobufLayer::readLinearRing(const double *coords, uint32_t coordsLength, uint32_t offset)
 {
     auto ls = new OGRLinearRing();
-    ls->setPoints(coordsLength >> 1, (OGRRawPoint *) coords);
+    ls->setPoints(coordsLength >> 1, (OGRRawPoint *) coords + offset);
     // TODO: handle Z / M
     return ls;
 }
@@ -638,7 +646,6 @@ OGRErr OGRFlatGeobufLayer::ICreateFeature(OGRFeature *poNewFeature)
             CPLError(CE_Failure, CPLE_AppDefined, "ICreateFeature: Unknown FlatGeobuf::GeometryType %d", (int) m_geometryType);
             return OGRERR_FAILURE;
     }
-    CPLDebug("FlatGeobuf", "geom encoded");
     auto pEnds = ends.size() == 0 ? nullptr : &ends;
     auto pEndss = endss.size() == 0 ? nullptr : &endss;
     auto pProperties = properties.size() == 0 ? nullptr : &properties;
@@ -668,7 +675,6 @@ OGRErr OGRFlatGeobufLayer::ICreateFeature(OGRFeature *poNewFeature)
 
 void OGRFlatGeobufLayer::writePoint(OGRPoint *p, std::vector<double> &coords)
 {
-    CPLDebug("FlatGeobuf", "writePoint %f %f", p->getX(), p->getY());
     coords.push_back(p->getX());
     coords.push_back(p->getY());
 }
