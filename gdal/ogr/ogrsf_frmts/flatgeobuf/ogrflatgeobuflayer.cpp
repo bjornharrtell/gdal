@@ -157,6 +157,7 @@ const std::vector<Offset<Column>> OGRFlatGeobufLayer::writeColumns(FlatBufferBui
         auto field = m_poFeatureDefn->GetFieldDefn(i);
         auto name = field->GetNameRef();
         auto columnType = toColumnType(field->GetType(), field->GetSubType());
+        CPLDebug("FlatGeobuf", "Create column %s (index %d)", name, i);
         auto column = CreateColumnDirect(fbb, name, columnType);
         columns.push_back(column);
     }
@@ -557,7 +558,7 @@ OGRPolygon *OGRFlatGeobufLayer::readPolygon(const double *coords, uint32_t coord
         p->addRingDirectly(readLinearRing(coords, coordsLength));
     } else {
         for (size_t i = 0; i < ends->size(); i++) {
-            auto end = ends->Get(i);
+            auto end = ends->Get(i) << 1;
             p->addRingDirectly(readLinearRing(coords, end - offset, offset));
             offset = end;
         }
@@ -581,7 +582,7 @@ OGRMultiPolygon *OGRFlatGeobufLayer::readMultiPolygon(
             auto p = new OGRPolygon();
             uint32_t ringCount = endss->Get(i);
             for (size_t j = 0; j < ringCount; j++) {
-                uint32_t end = ends->Get(roffset++);
+                uint32_t end = ends->Get(roffset++) << 1;
                 p->addRingDirectly(readLinearRing(coords, end - offset, offset));
                 offset = end;
             }
@@ -637,8 +638,8 @@ OGRErr OGRFlatGeobufLayer::ICreateFeature(OGRFeature *poNewFeature)
     if (fid == OGRNullFID)
         fid = m_featuresCount;
 
-    uint8_t *propertiesBuffer = new uint8_t[1000000];
-    uint32_t propertiesOffset = 0;
+    std::vector<uint8_t> properties;
+    properties.reserve(1024 * 4);
     FlatBufferBuilder fbb;
 
     for (int i = 0; i < m_poFeatureDefn->GetFieldCount(); i++) {
@@ -647,33 +648,27 @@ OGRErr OGRFlatGeobufLayer::ICreateFeature(OGRFeature *poNewFeature)
             continue;
 
         uint16_t column_index = i;
-        memcpy(propertiesBuffer + propertiesOffset, &column_index, sizeof(uint16_t));
-        propertiesOffset += sizeof(uint16_t);
+        std::copy(reinterpret_cast<const uint8_t *>(&column_index), reinterpret_cast<const uint8_t *>(&column_index + 1), std::back_inserter(properties));
 
         auto fieldType = fieldDef->GetType();
         auto field = poNewFeature->GetRawFieldRef(i);
         switch (fieldType) {
             case OGRFieldType::OFTInteger: {
-                memcpy(propertiesBuffer + propertiesOffset, &field->Integer, sizeof(int32_t));
-                propertiesOffset += sizeof(int32_t);
+                std::copy(reinterpret_cast<const uint8_t *>(&field->Integer), reinterpret_cast<const uint8_t *>(&field->Integer + 1), std::back_inserter(properties));
                 break;
             }
             case OGRFieldType::OFTInteger64: {
-                memcpy(propertiesBuffer + propertiesOffset, &field->Integer64, sizeof(int64_t));
-                propertiesOffset += sizeof(int64_t);
+                std::copy(reinterpret_cast<const uint8_t *>(&field->Integer64), reinterpret_cast<const uint8_t *>(&field->Integer64 + 1), std::back_inserter(properties));
                 break;
             }
             case OGRFieldType::OFTReal: {
-                memcpy(propertiesBuffer + propertiesOffset, &field->Real, sizeof(double));
-                propertiesOffset += sizeof(double);
+                std::copy(reinterpret_cast<const uint8_t *>(&field->Real), reinterpret_cast<const uint8_t *>(&field->Real + 1), std::back_inserter(properties));
                 break;
             }
             case OGRFieldType::OFTString: {
                 uint32_t len = strlen(field->String);
-                memcpy(propertiesBuffer + propertiesOffset, &len, sizeof(uint32_t));
-                propertiesOffset += sizeof(len);
-                memcpy(propertiesBuffer + propertiesOffset, field->String, len);
-                propertiesOffset += len;
+                std::copy(reinterpret_cast<const uint8_t *>(&len), reinterpret_cast<const uint8_t *>(&len + 1), std::back_inserter(properties));
+                std::copy(field->String, field->String + len, std::back_inserter(properties));
                 break;
             }
             default:
@@ -724,11 +719,9 @@ OGRErr OGRFlatGeobufLayer::ICreateFeature(OGRFeature *poNewFeature)
     CPLDebug("FlatGeobuf", "geom encoded");
     auto pEnds = ends.size() == 0 ? nullptr : &ends;
     auto pEndss = endss.size() == 0 ? nullptr : &endss;
-    std::vector<uint8_t> properties ( propertiesBuffer, propertiesBuffer + propertiesOffset );
-    auto feature = CreateFeatureDirect(fbb, fid, pEnds, pEndss, &xy, nullptr, nullptr, nullptr, &properties);
-    //auto feature = CreateFeatureDirect(fbb, fid, pEnds, pEndss, &coords, nullptr);
+    auto pProperties = properties.size() == 0 ? nullptr : &properties;
+    auto feature = CreateFeatureDirect(fbb, fid, pEnds, pEndss, &xy, nullptr, nullptr, nullptr, pProperties);
     fbb.FinishSizePrefixed(feature);
-    delete propertiesBuffer;
 
     OGREnvelope psEnvelope;
     ogrGeometry->getEnvelope(&psEnvelope);
@@ -771,7 +764,7 @@ uint32_t OGRFlatGeobufLayer::writeLineString(OGRLineString *ls, std::vector<doub
     for (int i = 0; i < ls->getNumPoints(); i++) {
         ls->getPoint(i, &p);
         writePoint(&p, coords);
-        length += 2;
+        length++;
     }
     return length;
 }
