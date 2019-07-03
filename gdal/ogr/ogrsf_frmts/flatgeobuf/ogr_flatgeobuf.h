@@ -55,11 +55,6 @@ class OGRFlatGeobufLayer : public OGRLayer
         GByte *m_featureBuf = nullptr;
         uint32_t m_featureSize;
         uint32_t m_featureBufSize = 0;
-        size_t m_padfSize = 0;
-        double *m_padfX = nullptr;
-        double *m_padfY = nullptr;
-        double *m_padfZ = nullptr;
-        double *m_padfM = nullptr;
 
         bool bCreateSpatialIndexAtClose;
 

@@ -250,15 +250,6 @@ OGRFlatGeobufLayer::~OGRFlatGeobufLayer()
     if (m_poFeatureDefn != nullptr)
         m_poFeatureDefn->Release();
 
-    if (m_padfX != nullptr)
-        CPLFree(m_padfX);
-    if (m_padfY != nullptr)
-        CPLFree(m_padfY);
-    if (m_padfZ != nullptr)
-        CPLFree(m_padfZ);
-    if (m_padfM != nullptr)
-        CPLFree(m_padfM);
-
     if (m_featureBuf != nullptr)
         VSIFree(m_featureBuf);
 
@@ -437,40 +428,10 @@ OGRFeature *OGRFlatGeobufLayer::GetNextFeature()
     return poFeature;
 }
 
-void OGRFlatGeobufLayer::ensurePadfBuffers(size_t count)
-{
-    size_t requiredSize = count * sizeof(double);
-    if (m_padfSize == 0) {
-        m_padfSize = std::max(1024 * sizeof(double), requiredSize);
-        CPLDebug("FlatGeobuf", "m_padfSize: %zu", m_padfSize);
-        m_padfX = static_cast<double *>(CPLMalloc(m_padfSize));
-        m_padfY = static_cast<double *>(CPLMalloc(m_padfSize));
-        if (m_hasZ)
-            m_padfZ = static_cast<double *>(CPLMalloc(m_padfSize));
-        if (m_hasM)
-            m_padfM = static_cast<double *>(CPLMalloc(m_padfSize));
-    } else if (m_padfSize < requiredSize) {
-        m_padfSize = std::max(m_padfSize * 2, requiredSize);
-        CPLDebug("FlatGeobuf", "m_padfSize: %zu", m_padfSize);
-        m_padfX = static_cast<double *>(CPLRealloc(m_padfX, m_padfSize));
-        m_padfY = static_cast<double *>(CPLRealloc(m_padfY, m_padfSize));
-        if (m_hasZ)
-            m_padfZ = static_cast<double *>(CPLRealloc(m_padfZ, m_padfSize));
-        if (m_hasM)
-            m_padfM = static_cast<double *>(CPLRealloc(m_padfM, m_padfSize));
-    }
-}
-
 OGRPoint *OGRFlatGeobufLayer::readPoint(const double *coords, uint32_t offset)
 {
     return new OGRPoint { coords[offset + 0], coords[offset + 1] };
-    // TODO: Z M ??
-    /*
-    else if (dimensions == 3)
-        return new OGRPoint { coords[offset + 0], coords[offset + 1], coords[offset + 2] };
-    else if (dimensions == 4)
-        return new OGRPoint { coords[offset + 0], coords[offset + 1], coords[offset + 2], coords[offset + 3] };
-    */
+    // TODO: handle Z / M
     CPLError(CE_Fatal, CPLE_AppDefined, "readPoint: Unsupported number of dimensions");
     return nullptr;
 }
@@ -486,27 +447,8 @@ OGRMultiPoint *OGRFlatGeobufLayer::readMultiPoint(const double *coords, uint32_t
 OGRLineString *OGRFlatGeobufLayer::readLineString(const double *coords, uint32_t coordsLength, uint32_t offset)
 {
     auto ls = new OGRLineString();
-
-    ensurePadfBuffers(coordsLength >> 1);
-
-    unsigned int c = 0;
-    for (size_t i = offset; i < offset + coordsLength; i = i + 2) {
-        m_padfX[c] = coords[i];
-        m_padfY[c] = coords[i+1];
-        if (m_hasZ)
-            m_padfZ[c] = coords[i+2];
-        if (m_hasM)
-            m_padfM[c] = coords[i+3];
-        c++;
-    }
-    ls->setNumPoints(coordsLength >> 1, 0);
-    ls->setPoints(coordsLength >> 1, m_padfX, m_padfY);
-    // TODO: handle hasZ hasM
-    /*else if (dimensions == 3)
-        ls->setPoints(dimLength, m_padfX, m_padfY, m_padfZ);
-    else if (dimensions == 4)
-        ls->setPoints(dimLength, m_padfX, m_padfY, m_padfZ, m_padfM);
-    */
+    ls->setPoints(coordsLength >> 1, (OGRRawPoint *) coords);
+    // TODO: handle Z / M
     return ls;
 }
 
@@ -526,28 +468,8 @@ OGRMultiLineString *OGRFlatGeobufLayer::readMultiLineString(const double *coords
 OGRLinearRing *OGRFlatGeobufLayer::readLinearRing(const double *coords, uint32_t coordsLength, uint32_t offset)
 {
     auto ls = new OGRLinearRing();
-
-    ensurePadfBuffers(coordsLength);
-
-    unsigned int c = 0;
-    for (size_t i = offset; i < offset + coordsLength; i = i + 2) {
-        m_padfX[c] = coords[i];
-        m_padfY[c] = coords[i+1];
-        if (m_hasZ)
-            m_padfZ[c] = coords[i+2];
-        if (m_hasM)
-            m_padfM[c] = coords[i+3];
-        c++;
-    }
-    ls->setNumPoints(coordsLength >> 1, 0);
-    ls->setPoints(coordsLength >> 1, m_padfX, m_padfY);
+    ls->setPoints(coordsLength >> 1, (OGRRawPoint *) coords);
     // TODO: handle Z / M
-    /*
-    else if (dimensions == 3)
-        ls->setPoints(dimLength, m_padfX, m_padfY, m_padfZ);
-    else if (dimensions == 4)
-        ls->setPoints(dimLength, m_padfX, m_padfY, m_padfZ, m_padfM);
-    */
     return ls;
 }
 
