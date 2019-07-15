@@ -541,7 +541,7 @@ OGRGeometry *OGRFlatGeobufLayer::readGeometry(const Feature *feature)
         case GeometryType::Polygon:
             return readPolygon(xy, xySize, feature->ends());
         case GeometryType::MultiPolygon:
-            return readMultiPolygon(xy, xySize, feature->ends(), feature->endss());
+            return readMultiPolygon(xy, xySize, feature->ends(), feature->lengths());
         default:
             CPLError(CE_Fatal, CPLE_AppDefined, "readGeometry: Unknown FlatGeobuf::GeometryType %d", (int) m_geometryType);
     }
@@ -724,7 +724,7 @@ void OGRFlatGeobufLayer::writeMultiPolygon(
     OGRMultiPolygon *mp,
     std::vector<double> &coords,
     std::vector<uint32_t> &ends,
-    std::vector<uint32_t> &endss)
+    std::vector<uint32_t> &lengths)
 {
     uint32_t end = 0;
     auto isMulti = mp->getNumGeometries() > 1;
@@ -732,7 +732,7 @@ void OGRFlatGeobufLayer::writeMultiPolygon(
         auto p = mp->getGeometryRef(i)->toPolygon();
         end = writePolygon(p, coords, ends, isMulti, end);
         if (isMulti)
-            endss.push_back(p->getNumInteriorRings() + 1);
+            lengths.push_back(p->getNumInteriorRings() + 1);
     }
 }
 
