@@ -448,10 +448,10 @@ OGRMultiPoint *OGRFlatGeobufLayer::readMultiPoint(const double *coords, uint32_t
     return mp;
 }
 
-OGRLineString *OGRFlatGeobufLayer::readLineString(const double *coords, uint32_t coordsLength, uint32_t offset)
+OGRLineString *OGRFlatGeobufLayer::readLineString(const double *coords, uint32_t len, uint32_t offset)
 {
     auto ls = new OGRLineString();
-    ls->setPoints(coordsLength >> 1, (OGRRawPoint *) coords + offset);
+    ls->setPoints(len, (OGRRawPoint *) coords + offset);
     // TODO: handle Z / M
     return ls;
 }
@@ -462,17 +462,16 @@ OGRMultiLineString *OGRFlatGeobufLayer::readMultiLineString(const double *coords
     uint32_t offset = 0;
     for (size_t i = 0; i < ends->size(); i++) {
         auto end = ends->Get(i);
-        auto ls = readLineString(coords, end, offset);
-        mls->addGeometryDirectly(ls);
+        mls->addGeometryDirectly(readLineString(coords, end - offset, offset));
         offset = end;
     }
     return mls;
 }
 
-OGRLinearRing *OGRFlatGeobufLayer::readLinearRing(const double *coords, uint32_t coordsLength, uint32_t offset)
+OGRLinearRing *OGRFlatGeobufLayer::readLinearRing(const double *coords, uint32_t len, uint32_t offset)
 {
     auto ls = new OGRLinearRing();
-    ls->setPoints(coordsLength >> 1, (OGRRawPoint *) coords + offset);
+    ls->setPoints(len, (OGRRawPoint *) coords + offset);
     // TODO: handle Z / M
     return ls;
 }
@@ -481,10 +480,10 @@ OGRPolygon *OGRFlatGeobufLayer::readPolygon(const double *coords, uint32_t coord
 {
     auto p = new OGRPolygon();
     if (ends == nullptr || ends->size() < 2) {
-        p->addRingDirectly(readLinearRing(coords, coordsLength));
+        p->addRingDirectly(readLinearRing(coords, coordsLength >> 1));
     } else {
         for (size_t i = 0; i < ends->size(); i++) {
-            auto end = ends->Get(i) << 1;
+            auto end = ends->Get(i);
             p->addRingDirectly(readLinearRing(coords, end - offset, offset));
             offset = end;
         }
@@ -508,7 +507,7 @@ OGRMultiPolygon *OGRFlatGeobufLayer::readMultiPolygon(
             auto p = new OGRPolygon();
             uint32_t ringCount = endss->Get(i);
             for (size_t j = 0; j < ringCount; j++) {
-                uint32_t end = ends->Get(roffset++) << 1;
+                uint32_t end = ends->Get(roffset++);
                 p->addRingDirectly(readLinearRing(coords, end - offset, offset));
                 offset = end;
             }
@@ -531,7 +530,7 @@ OGRGeometry *OGRFlatGeobufLayer::readGeometry(const Feature *feature)
         case GeometryType::MultiPoint:
             return readMultiPoint(xy, xySize);
         case GeometryType::LineString:
-            return readLineString(xy, xySize);
+            return readLineString(xy, xySize >> 1);
         case GeometryType::MultiLineString:
             return readMultiLineString(xy, feature->ends());
         case GeometryType::Polygon:
