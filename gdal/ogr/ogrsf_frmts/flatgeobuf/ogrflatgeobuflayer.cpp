@@ -28,6 +28,7 @@ OGRFlatGeobufLayer::OGRFlatGeobufLayer(const Header *poHeader, const char* pszFi
     m_create = false;
 
     m_featuresCount = m_poHeader->features_count();
+    CPLDebug("FlatGeobuf", "m_featuresCount: %zu", m_featuresCount);
     m_geometryType = m_poHeader->geometry_type();
     m_hasM = m_poHeader->hasM();
     m_hasZ = m_poHeader->hasZ();
@@ -43,11 +44,6 @@ OGRFlatGeobufLayer::OGRFlatGeobufLayer(const Header *poHeader, const char* pszFi
     }
 
     auto eGType = getOGRwkbGeometryType();
-
-    CPLDebug("FlatGeobuf", "m_featuresCount: %zu", m_featuresCount);
-
-    //CPLError(CE_Failure, CPLE_OpenFailed, "m_featuresCount is %d.\n", m_featuresCount);
-    //CPLError(CE_Failure, CPLE_OpenFailed, "m_poHeader->name()->c_str() is %s.\n", m_poHeader->name()->c_str());
 
     const char *pszName = nullptr;
     if (m_poHeader->name()) {
