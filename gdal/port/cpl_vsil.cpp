@@ -904,7 +904,7 @@ int VSIHasOptimizedReadMultiRange( const char* pszPath )
  * Currently only returns a non-NULL value for network-based virtual file systems.
  * For example "/vsis3/bucket/filename" will be expanded as
  * "https://bucket.s3.amazon.com/filename"
- * 
+ *
  * Note that the lifetime of the returned string, is short, and may be
  * invalidated by any following GDAL functions.
  *
@@ -1125,7 +1125,7 @@ bool VSIFilesystemHandler::Sync( const char* pszSource, const char* pszTarget,
         {
             osTarget = CPLFormFilename(osTarget,
                                        CPLGetFilename(pszSource), nullptr);
-            bTargetIsFile = VSIStatL(osTarget, &sTarget) == 0 && 
+            bTargetIsFile = VSIStatL(osTarget, &sTarget) == 0 &&
                             !CPL_TO_BOOL(VSI_ISDIR(sTarget.st_mode));
         }
         if( bTargetIsFile )
@@ -2441,6 +2441,9 @@ VSIFileManager *VSIFileManager::Get()
 #ifdef HAVE_LIBZ
       VSIInstallGZipFileHandler();
       VSIInstallZipFileHandler();
+#endif
+#ifdef HAVE_LIBLZ4
+      VSIInstallLz4FileHandler();
 #endif
 #ifdef HAVE_CURL
       VSIInstallCurlFileHandler();

@@ -52,6 +52,11 @@ OBJ	:= 	$(OBJ)  cpl_vsil_gzip.o cpl_minizip_ioapi.o \
 CPPFLAGS	:=	$(CPPFLAGS) -DHAVE_LIBZ
 endif
 
+ifneq ($(LIBLZ4_SETTING),no)
+OBJ	:= 	$(OBJ)  cpl_vsil_lz4.o
+CPPFLAGS	:=	$(CPPFLAGS) -DHAVE_LIBLZ4
+endif
+
 ifeq ($(HAVE_LIBXML2),yes)
 CPPFLAGS	:=	$(CPPFLAGS) $(LIBXML2_INC) -DHAVE_LIBXML2
 endif
