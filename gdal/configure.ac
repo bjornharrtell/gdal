@@ -1371,6 +1371,43 @@ fi
 
 AC_SUBST(ZSTD_SETTING,$ZSTD_SETTING)
 
+
+dnl ---------------------------------------------------------------------------
+dnl Check if lz4 is available.
+dnl ---------------------------------------------------------------------------
+
+AC_ARG_WITH(lz4,[  --with-lz4[=ARG]       Include lz4 support (ARG=yes/no/installation_prefix)],,)
+
+if test "$with_lz4" = "" -o "$with_lz4" = "yes" ; then
+  AC_CHECK_LIB(lz4,LZ4_decompress_safe,LZ4_SETTING=yes,LZ4_SETTING=no,)
+
+  if test "$LZ4_SETTING" = "yes" ; then
+    LIBS="-llz4 $LIBS"
+  else
+    if test "$with_zstd" = "yes" ; then
+      AC_MSG_ERROR([liblz4 not found])
+    else
+      echo "liblz4 not found - LZ4 support disabled"
+    fi
+  fi
+elif test "$with_lz4" != "" -a "$with_lz4" != "no"; then
+
+  AC_CHECK_LIB(lz4,ZSTD_decompressStream,LZ4_SETTING=yes,LZ4_SETTING=no,-L$with_lz4/lib)
+
+  if test "$LZ4_SETTING" = "yes" -a -f "$with_lz4/include/lz4.h" ; then
+    LIBS="-L$with_lz4/lib -llz4 $LIBS"
+    EXTRA_INCLUDES="-I$with_lz4/include $EXTRA_INCLUDES"
+  else
+    AC_MSG_ERROR([liblz4 not found])
+  fi
+
+else
+    LZ4_SETTING=no
+fi
+
+AC_SUBST(LZ4_SETTING,$LZ4_SETTING)
+
+
 GDALFORMATS_ENABLED=
 GDALFORMATS_DISABLED=
 OGRFORMATS_ENABLED=
@@ -1559,10 +1596,10 @@ AC_SUBST(GDALFORMATS_ENABLED,$GDALFORMATS_ENABLED)
 if test "$LIBZ_SETTING" != "no" ; then
   if test "x$INTERNAL_FORMAT_rik_ENABLED" = "xyes"; then
       GDALFORMATS_ENABLED="$GDALFORMATS_ENABLED rik"
-  fi 
+  fi
   if test "x$INTERNAL_FORMAT_ozi_ENABLED" = "xyes"; then
       GDALFORMATS_ENABLED="$GDALFORMATS_ENABLED ozi"
-  fi 
+  fi
 fi
 
 
@@ -3777,7 +3814,7 @@ m4_foreach_w([frmt],XERCES_DRIVERS,[
   if test "x$driver_enabled" = "xyes"; then
     OGRFORMATS_ENABLED="$OGRFORMATS_ENABLED frmt"
     OGRFORMATS_ENABLED_CFLAGS="$OGRFORMATS_ENABLED_CFLAGS _OGRDEFINE(frmt)"
-  fi 
+  fi
 ])
 
 fi
@@ -3801,7 +3838,7 @@ m4_foreach_w([frmt],EXPAT_DRIVERS,[
   if test "x$driver_enabled" = "xyes"; then
     OGRFORMATS_ENABLED="$OGRFORMATS_ENABLED frmt"
     OGRFORMATS_ENABLED_CFLAGS="$OGRFORMATS_ENABLED_CFLAGS _OGRDEFINE(frmt)"
-  fi 
+  fi
 ])
 
 fi
@@ -3892,7 +3929,7 @@ m4_foreach_w([frmt],ODBC_DRIVERS,[
   if test "x$driver_enabled" = "xyes"; then
     OGRFORMATS_ENABLED="$OGRFORMATS_ENABLED frmt"
     OGRFORMATS_ENABLED_CFLAGS="$OGRFORMATS_ENABLED_CFLAGS _OGRDEFINE(frmt)"
-  fi 
+  fi
 ])
 fi
 
@@ -4056,14 +4093,14 @@ m4_foreach_w([frmt],CURL_FORMATS,[
   driver_enabled=m4_join([_],[$INTERNAL_FORMAT],frmt,[ENABLED])
   if test "x$driver_enabled" = "xyes"; then
     GDALFORMATS_ENABLED="$GDALFORMATS_ENABLED frmt"
-  fi 
+  fi
 ])
 m4_foreach_w([frmt],CURL_DRIVERS,[
   driver_enabled=m4_join([_],[$INTERNAL_FORMAT],frmt,[ENABLED])
   if test "x$driver_enabled" = "xyes"; then
     OGRFORMATS_ENABLED="$OGRFORMATS_ENABLED frmt"
     OGRFORMATS_ENABLED_CFLAGS="$OGRFORMATS_ENABLED_CFLAGS _OGRDEFINE(frmt)"
-  fi 
+  fi
 ])
 
 fi
@@ -4235,7 +4272,7 @@ m4_foreach_w([frmt],SQLITE_FORMATS,[
   driver_enabled=m4_join([_],[$INTERNAL_FORMAT],frmt,[ENABLED])
   if test "x$driver_enabled" = "xyes"; then
     GDALFORMATS_ENABLED="$GDALFORMATS_ENABLED frmt"
-  fi 
+  fi
 ])
 
 m4_foreach_w([frmt],SQLITE_DRIVERS,[
@@ -4243,7 +4280,7 @@ m4_foreach_w([frmt],SQLITE_DRIVERS,[
   if test "x$driver_enabled" = "xyes"; then
     OGRFORMATS_ENABLED="$OGRFORMATS_ENABLED frmt"
     OGRFORMATS_ENABLED_CFLAGS="$OGRFORMATS_ENABLED_CFLAGS _OGRDEFINE(frmt)"
-  fi 
+  fi
 ])
 
 fi
@@ -4889,7 +4926,7 @@ if test "$PDF_PLUGIN" != "yes" ; then
     if test "$LIBZ_SETTING" != "no" ; then
       GDALFORMATS_ENABLED="$GDALFORMATS_ENABLED pdf"
     fi
-  fi 
+  fi
 fi
 
 
@@ -5421,7 +5458,7 @@ TILEDB_SETTING=no
 if test "$with_tiledb" = "yes" -o "$with_tiledb" = "" ; then
 
   AC_CHECK_LIB(tiledb,tiledb_coords,TILEDB_SETTING=yes,TILEDB_SETTING=no,)
-  
+
   if test "$TILEDB_SETTING" = "yes" ; then
     LIBS="-ltiledb $LIBS"
   else
@@ -5962,6 +5999,7 @@ LOC_MSG()
 LOC_MSG([  LIBZ support:              ${LIBZ_SETTING}])
 LOC_MSG([  LIBLZMA support:           ${LIBLZMA_SETTING}])
 LOC_MSG([  ZSTD support:              ${ZSTD_SETTING}])
+LOC_MSG([  LZ4 support:               ${LZ4_SETTING}])
 LOC_MSG([  cryptopp support:          ${HAVE_CRYPTOPP}])
 LOC_MSG([  crypto/openssl support:    ${HAVE_OPENSSL_CRYPTO}])
 LOC_MSG([  GRASS support:             ${GRASS_SETTING}])
