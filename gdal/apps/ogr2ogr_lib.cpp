@@ -293,6 +293,9 @@ struct GDALVectorTranslateOptions
         in source layer */
     bool bForceNullable;
 
+    /*! If set to true, empty string values will be treated as null */
+    bool bEmptyStrAsNull;
+
     /*! If set to true, does not propagate default field values to target layer if they exist in
         source layer */
     bool bUnsetDefault;
@@ -1292,6 +1295,7 @@ GDALVectorTranslateOptions* GDALVectorTranslateOptionsClone(const GDALVectorTran
 
 class GDALVectorTranslateWrappedDataset: public GDALDataset
 {
+                const GDALVectorTranslateOptions *m_poOptions;
                 GDALDataset* m_poBase;
                 OGRSpatialReference* m_poOutputSRS;
                 bool m_bTransform;
@@ -1302,7 +1306,8 @@ class GDALVectorTranslateWrappedDataset: public GDALDataset
                 GDALVectorTranslateWrappedDataset(
                                     GDALDataset* poBase,
                                     OGRSpatialReference* poOutputSRS,
-                                    bool bTransform);
+                                    bool bTransform,
+                                    const GDALVectorTranslateOptions *poOptions);
 public:
 
        virtual ~GDALVectorTranslateWrappedDataset();
@@ -1320,16 +1325,19 @@ public:
        static GDALVectorTranslateWrappedDataset* New(
                                           GDALDataset* poBase,
                                           OGRSpatialReference* poOutputSRS,
-                                          bool bTransform );
+                                          bool bTransform,
+                                          const GDALVectorTranslateOptions *poOptions);
 };
 
 class GDALVectorTranslateWrappedLayer: public OGRLayerDecorator
 {
+    const GDALVectorTranslateOptions *m_poOptions;
     std::vector<OGRCoordinateTransformation*> m_apoCT;
     OGRFeatureDefn* m_poFDefn;
 
             GDALVectorTranslateWrappedLayer(OGRLayer* poBaseLayer,
-                                            bool bOwnBaseLayer);
+                                            bool bOwnBaseLayer,
+                                            const GDALVectorTranslateOptions *poOptions);
             OGRFeature* TranslateFeature(OGRFeature* poSrcFeat);
 public:
 
@@ -1342,12 +1350,16 @@ public:
                                         OGRLayer* poBaseLayer,
                                         bool bOwnBaseLayer,
                                         OGRSpatialReference* poOutputSRS,
-                                        bool bTransform);
+                                        bool bTransform,
+                                        const GDALVectorTranslateOptions *poOptions);
 };
 
 GDALVectorTranslateWrappedLayer::GDALVectorTranslateWrappedLayer(
-                    OGRLayer* poBaseLayer, bool bOwnBaseLayer) :
+                    OGRLayer* poBaseLayer,
+                    bool bOwnBaseLayer,
+                    const GDALVectorTranslateOptions *poOptions) :
         OGRLayerDecorator(poBaseLayer, bOwnBaseLayer),
+        m_poOptions( poOptions ),
         m_apoCT( poBaseLayer->GetLayerDefn()->GetGeomFieldCount(),
                  static_cast<OGRCoordinateTransformation*>(nullptr) ),
         m_poFDefn( nullptr )
@@ -1358,10 +1370,11 @@ GDALVectorTranslateWrappedLayer* GDALVectorTranslateWrappedLayer::New(
                     OGRLayer* poBaseLayer,
                     bool bOwnBaseLayer,
                     OGRSpatialReference* poOutputSRS,
-                    bool bTransform )
+                    bool bTransform,
+                    const GDALVectorTranslateOptions *poOptions)
 {
     GDALVectorTranslateWrappedLayer* poNew =
-                new GDALVectorTranslateWrappedLayer(poBaseLayer, bOwnBaseLayer);
+                new GDALVectorTranslateWrappedLayer(poBaseLayer, bOwnBaseLayer, poOptions);
     poNew->m_poFDefn = poBaseLayer->GetLayerDefn()->Clone();
     poNew->m_poFDefn->Reference();
     if( !poOutputSRS )
@@ -1455,6 +1468,19 @@ OGRFeature* GDALVectorTranslateWrappedLayer::TranslateFeature(
                     m_poFDefn->GetGeomFieldDefn(i)->GetSpatialRef() );
         }
     }
+    if (m_poOptions->bEmptyStrAsNull) {
+        for( int i=0; i < poNewFeat->GetFieldCount(); i++ )
+        {
+            if (!poNewFeat->IsFieldSetAndNotNull(i))
+                continue;
+            auto fieldDef = poNewFeat->GetFieldDefnRef(i);
+            if (fieldDef->GetType() != OGRFieldType::OFTString)
+                continue;
+            auto str = poNewFeat->GetFieldAsString(i);
+            if (strcmp(str, ""))
+                poNewFeat->SetFieldNull(i);
+        }
+    }
     delete poSrcFeat;
     return poNewFeat;
 }
@@ -1463,7 +1489,9 @@ OGRFeature* GDALVectorTranslateWrappedLayer::TranslateFeature(
 GDALVectorTranslateWrappedDataset::GDALVectorTranslateWrappedDataset(
                                     GDALDataset* poBase,
                                     OGRSpatialReference* poOutputSRS,
-                                    bool bTransform):
+                                    bool bTransform,
+                                    const GDALVectorTranslateOptions *poOptions):
+                                                m_poOptions(poOptions),
                                                 m_poBase(poBase),
                                                 m_poOutputSRS(poOutputSRS),
                                                 m_bTransform(bTransform)
@@ -1479,17 +1507,19 @@ GDALVectorTranslateWrappedDataset::GDALVectorTranslateWrappedDataset(
 GDALVectorTranslateWrappedDataset* GDALVectorTranslateWrappedDataset::New(
                         GDALDataset* poBase,
                         OGRSpatialReference* poOutputSRS,
-                        bool bTransform )
+                        bool bTransform,
+                        const GDALVectorTranslateOptions *poOptions )
 {
     GDALVectorTranslateWrappedDataset* poNew =
                                 new GDALVectorTranslateWrappedDataset(
                                                                 poBase,
                                                                 poOutputSRS,
-                                                                bTransform);
+                                                                bTransform,
+                                                                poOptions);
     for(int i = 0; i < poBase->GetLayerCount(); i++ )
     {
         OGRLayer* poLayer = GDALVectorTranslateWrappedLayer::New(
-                            poBase->GetLayer(i), false, poOutputSRS, bTransform);
+                            poBase->GetLayer(i), false, poOutputSRS, bTransform, poOptions);
         if(poLayer == nullptr )
         {
             delete poNew;
@@ -1547,7 +1577,7 @@ OGRLayer* GDALVectorTranslateWrappedDataset::GetLayerByName(const char* pszName)
     if( poLayer == nullptr )
         return nullptr;
     poLayer = GDALVectorTranslateWrappedLayer::New(
-                                poLayer, false, m_poOutputSRS, m_bTransform);
+                                poLayer, false, m_poOutputSRS, m_bTransform, m_poOptions);
     if( poLayer == nullptr )
         return nullptr;
 
@@ -1571,14 +1601,14 @@ OGRLayer* GDALVectorTranslateWrappedDataset::GetLayerByName(const char* pszName)
 OGRLayer *  GDALVectorTranslateWrappedDataset::ExecuteSQL(
                                         const char *pszStatement,
                                         OGRGeometry *poSpatialFilter,
-                                        const char *pszDialect )
+                                        const char *pszDialect)
 {
     OGRLayer* poLayer = m_poBase->ExecuteSQL(pszStatement,
                                                 poSpatialFilter, pszDialect);
     if( poLayer == nullptr )
         return nullptr;
     return GDALVectorTranslateWrappedLayer::New(
-                                poLayer, true, m_poOutputSRS, m_bTransform);
+                                poLayer, true, m_poOutputSRS, m_bTransform, m_poOptions);
 }
 
 void GDALVectorTranslateWrappedDataset:: ReleaseResultSet(
@@ -1774,6 +1804,11 @@ static GDALDataset* GDALVectorTranslateCreateCopy(
         CPLError(CE_Failure, CPLE_NotSupported, szErrorMsg, "-forceNullable");
         return nullptr;
     }
+    if( psOptions->bEmptyStrAsNull )
+    {
+        CPLError(CE_Failure, CPLE_NotSupported, szErrorMsg, "-emptyStrAsNull");
+        return nullptr;
+    }
     if( psOptions->bUnsetDefault )
     {
         CPLError(CE_Failure, CPLE_NotSupported, szErrorMsg, "-unsetDefault");
@@ -1821,7 +1856,7 @@ static GDALDataset* GDALVectorTranslateCreateCopy(
             return nullptr;
         }
         poWrkSrcDS = GDALVectorTranslateWrappedDataset::New(
-            poDS, oOutputSRSHolder.get(), psOptions->bTransform);
+            poDS, oOutputSRSHolder.get(), psOptions->bTransform, psOptions);
         if( poWrkSrcDS == nullptr )
             return nullptr;
     }
@@ -5658,6 +5693,10 @@ GDALVectorTranslateOptions *GDALVectorTranslateOptionsNew(char** papszArgv,
             CSLDestroy(psOptions->papszFieldMap);
             psOptions->papszFieldMap = CSLTokenizeStringComplex(papszArgv[++i], ",",
                                                       FALSE, FALSE );
+        }
+        else if( EQUAL(papszArgv[i],"-emptyStrAsNull") )
+        {
+            psOptions->bEmptyStrAsNull = true;
         }
         else if( EQUAL(papszArgv[i],"-forceNullable") )
         {
